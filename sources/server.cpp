@@ -10,6 +10,14 @@ socklen_t * /* restrict */address_len)
 
 int main(void)
 {
+    std::string index;
+    std::ifstream ifs("sources/index.html");
+    if (!ifs)
+        TERMINATE("could not open index.html");
+    std::string tmp;
+    while (std::getline(ifs, tmp))
+        index += tmp;
+
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
     * SOCK_STREAM   -   virtual circuit service
@@ -51,15 +59,23 @@ int main(void)
     if (new_socket == -1)
         TERMINATE("accept failed");
 
+    LOG("Client connected");
+
     /* send and receive messages using read and write */
-    char message[1024];
+    // char message[1024];
     while (1)
     {
-        read(new_socket, message, 1024);
-        LOG("Received message on the server: " << message);
-        LOG("Client joined from port: " << address.sin_port);
+        std::string header("HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: " + std::to_string(index.length()) + "\n\n" + index);
+        write(new_socket, header.c_str(), header.length());
+        // write(new_socket, index.c_str(), index.length());
+        // read(new_socket, message, 1024);
+        // LOG("Received message on the server: " << message);
+        // LOG("Client joined from port: " << address.sin_port);
         break ;
     }
+
+    while (1)
+        usleep(10000);
 
     /* close socket after we are done communicating*/
     close(new_socket);

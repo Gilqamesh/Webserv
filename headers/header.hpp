@@ -9,6 +9,8 @@
                          // inet_addr
 # include <unistd.h>     // write, read, close
 # include <string>
+# include <fstream>
+# include <sstream>
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
