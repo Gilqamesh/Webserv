@@ -39,17 +39,51 @@ server::server(int port, int backlog)
     connected_sockets_set.insert(server_socket_fd);
     FD_ZERO(&connected_sockets);
     FD_SET(server_socket_fd, &connected_sockets);
+}
 
-    /* ready_sockets
-    * will be a copy of connected_sockets each iteration,
-    * and is needed because select is destructive
-    */
+server::server(const server &other)
+    : server_socket_fd(other.server_socket_fd),
+    server_port(other.server_port),
+    server_backlog(other.server_backlog),
+    connected_sockets(other.connected_sockets),
+    connected_sockets_set(other.connected_sockets_set),
+    cachedFiles(other.cachedFiles)
+{
+
+}
+
+server &server::operator=(const server &other)
+{
+    if (this != &other)
+    {
+        server_socket_fd = other.server_socket_fd;
+        server_port = other.server_port;
+        server_backlog = other.server_backlog;
+        connected_sockets = other.connected_sockets;
+        connected_sockets_set = other.connected_sockets_set;
+        cachedFiles = other.cachedFiles;
+    }
+    return (*this);
+}
+
+server::~server()
+{
+    close(server_socket_fd);
+}
+
+void server::server_listen(void)
+{
     while (true)
     {
+        /* ready_sockets
+        * a copy of connected_sockets each iteration,
+        * is needed because 'select' is destructive
+        */
         fd_set ready_sockets = connected_sockets;
         struct timeval timeout = { TIMEOUT_TO_CUT_CONNECTION, 0 };
         /* select()
         * monitors all file descriptors and waits until one of them is ready
+        * first argument is the highest possible socket number + 1
         */
         if (select(*(--connected_sockets_set.end()) + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
             TERMINATE("select failed");
@@ -67,32 +101,24 @@ server::server(int port, int backlog)
     }
 }
 
-server::server(const server &other)
-    : server_socket_fd(other.server_socket_fd),
-    server_port(other.server_port),
-    server_backlog(other.server_backlog),
-    connected_sockets(other.connected_sockets),
-    connected_sockets_set(other.connected_sockets_set)
+void server::cache_file(const std::string &path, const std::string &route)
 {
-
-}
-
-server &server::operator=(const server &other)
-{
-    if (this != &other)
+    if (cachedFiles.count(route))
     {
-        server_socket_fd = other.server_socket_fd;
-        server_port = other.server_port;
-        server_backlog = other.server_backlog;
-        connected_sockets = other.connected_sockets;
-        connected_sockets_set = other.connected_sockets_set;
+        WARN("route: '" << route << "' already exists");
+        return ;
     }
-    return (*this);
-}
-
-server::~server()
-{
-    close(server_socket_fd);
+    std::ifstream ifs(path, std::ifstream::in);
+    if (!ifs)
+    {
+        WARN("file '" + path + "' could not be opened");
+        return ;
+    }
+    std::string tmp;
+    std::string content;
+    while (getline(ifs, tmp))
+        content += tmp;
+    cachedFiles[route] = content;
 }
 
 void server::accept_connection(void)
@@ -112,7 +138,7 @@ void server::accept_connection(void)
         TERMINATE("accept failed");
     FD_SET(new_socket, &connected_sockets);
     connected_sockets_set.insert(new_socket);
-    LOG("Client joined from port: " << ntohs(address.sin_port));
+    LOG("Client joined from socket: " << new_socket);
 }
 
 void server::cut_connection(int socket)
@@ -126,6 +152,7 @@ void server::cut_connection(int socket)
 
 void server::handle_connection(int socket)
 {
-    std::string msg("hello");
+    std::string msg("HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: " + std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"]);
     write(socket, msg.c_str(), msg.length());
+    cut_connection(socket);
 }

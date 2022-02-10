@@ -17,6 +17,7 @@
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
+# define WARN(x) (LOG_E("Warning: " << x))
 # define TERMINATE(x) ({\
     perror(x);\
     exit(EXIT_FAILURE);\
