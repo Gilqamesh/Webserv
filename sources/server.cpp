@@ -59,23 +59,16 @@ int main(void)
     if (new_socket == -1)
         TERMINATE("accept failed");
 
-    LOG("Client connected");
+    LOG("Client joined from port: " << address.sin_port);
 
-    /* send and receive messages using read and write */
-    // char message[1024];
+
+    /* send and receive messages using read and write to the socket */
     while (1)
     {
-        std::string header("HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: " + std::to_string(index.length()) + "\n\n" + index);
+        std::string header("HTTP/1.1 200 OK\nContent-Type: text/html;charset=UTF-8\nContent-Length: " + std::to_string(index.length()) + "\n\n" + index);
         write(new_socket, header.c_str(), header.length());
-        // write(new_socket, index.c_str(), index.length());
-        // read(new_socket, message, 1024);
-        // LOG("Received message on the server: " << message);
-        // LOG("Client joined from port: " << address.sin_port);
         break ;
     }
-
-    while (1)
-        usleep(10000);
 
     /* close socket after we are done communicating*/
     close(new_socket);

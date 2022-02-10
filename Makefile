@@ -6,17 +6,11 @@ source_files = main.cpp
 header_directory = headers
 source_directory = sources
 object_directory = objects
-server_name = 42Server
-client_name = 42Client
+server_name = server
+client_name = client
 
 $(name): $(object_directory)/$(source_files:.cpp=.o)
 	$(compiler) $(link_flags) -o $@ $^
-
-$(server_name): $(object_directory)/server.o
-	$(compiler) $(link_flags) -o $@ $<
-
-$(client_name): $(object_directory)/client.o
-	$(compiler) $(link_flags) -o $@ $<
 
 $(object_directory)/main.o: $(source_directory)/main.cpp $(header_directory)/*.hpp
 	cd $(object_directory) && $(compiler) $(compile_flags) -I../$(header_directory) -c ../$<
@@ -30,11 +24,11 @@ all:
 clean:
 	rm -f $(object_directory)/*.o
 fclean: clean
-	rm -f $(name)
+	rm -f $(name) $(server_name) $(client_name)
 re: fclean
 	make $(name)
 bonus: all
 server:
-	make $(server_name)
+	$(compiler) $(link_flags) -o $(server_name) $(object_directory)/server.o
 client:
-	make $(client_name)
+	$(compiler) $(link_flags) -o $(client_name) $< $(object_directory)/client.o
