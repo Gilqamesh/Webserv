@@ -11,6 +11,7 @@
 # include <string>
 # include <fstream>
 # include <sstream>
+# include <poll.h>  // poll
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
