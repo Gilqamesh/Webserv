@@ -11,3 +11,5 @@ Web Server Concepts: https://www.youtube.com/watch?v=9J1nJOivdyw
 What http is: https://www.youtube.com/watch?v=0OrmKCB0UrQ&t=111s
 
 GET vs POST: https://www.youtube.com/watch?v=K8HJ6DN23zI
+
+Usage of select: https://www.youtube.com/watch?v=Y6pFtgRdUts&list=PL9IEJIKnBJjH_zM5LnovnoaKlXML5qh17&index=8&ab_channel=JacobSorber
