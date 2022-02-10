@@ -12,11 +12,14 @@ client_name = client
 $(name): $(object_directory)/$(source_files:.cpp=.o)
 	$(compiler) $(link_flags) -o $@ $^
 
-$(object_directory)/main.o: $(source_directory)/main.cpp $(header_directory)/*.hpp
+$(object_directory)/main.o: $(source_directory)/main.cpp
 	cd $(object_directory) && $(compiler) $(compile_flags) -I../$(header_directory) -c ../$<
 
-$(object_directory)/%.o: $(source_directory)/%.cpp # $(header_directory)/%.hpp
+$(object_directory)/%.o: $(source_directory)/%.cpp
 	cd $(object_directory) && $(compiler) $(compile_flags) -I../$(header_directory) -c ../$<
+
+$(server_name): $(object_directory)/server.o $(object_directory)/server_test.o $(header_directory)/server.hpp $(header_directory)/header.hpp
+	$(compiler) $(link_flags) -o $@ $(object_directory)/server.o $(object_directory)/server_test.o
 
 .PHONY: all clean re fclean bonus server client
 all:
@@ -28,7 +31,5 @@ fclean: clean
 re: fclean
 	make $(name)
 bonus: all
-server:
-	$(compiler) $(link_flags) -o $(server_name) $(object_directory)/server.o
 client:
-	$(compiler) $(link_flags) -o $(client_name) $< $(object_directory)/client.o
+	$(compiler) $(link_flags) -o $(client_name) $< $(object_directory)/client_test.o

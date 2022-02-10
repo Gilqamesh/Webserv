@@ -11,16 +11,18 @@
 # include <string>
 # include <fstream>
 # include <sstream>
-# include <poll.h>  // poll
+# include <poll.h>          // poll
+# include <sys/select.h>    // select
+# include <pthread.h>       // <thread> is c++11
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
 # define TERMINATE(x) ({\
-    LOG_E(x);\
+    perror(x);\
     exit(EXIT_FAILURE);\
 })
 # define PRINT_HERE() (LOG(__FILE__ << " " << __LINE__))
-# define PORT 8080
-# define MAX_NUMBER_OF_CONNECTIONS 3
+/* in seconds */
+# define TIMEOUT_TO_CUT_CONNECTION 5
 
 #endif
