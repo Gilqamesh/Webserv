@@ -4,6 +4,7 @@
 # include "header.hpp"
 # include <set>
 # include <map>
+# include <vector>
 
 class server
 {
@@ -14,6 +15,7 @@ private:
     fd_set                              connected_sockets;
     std::set<int>                       connected_sockets_set;
     std::map<std::string, std::string>  cachedFiles; /* route - content */
+    std::set<std::string>               acceptedMethods;
 public:
     server(int port, int backlog);
     server(const server& other);

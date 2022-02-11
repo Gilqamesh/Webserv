@@ -1,10 +1,18 @@
 #include "server.hpp"
 #include "HandleHTTPRequest.hpp"
 #include "Utils.hpp"
+#include <cstdio>
 
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
 {
+    /*
+    * add allowed methods for clients
+    */
+    acceptedMethods.insert("GET");
+    acceptedMethods.insert("POST");
+    acceptedMethods.insert("DELETE");
+
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
     * SOCK_STREAM   -   virtual circuit service
@@ -49,7 +57,8 @@ server::server(const server &other)
     server_backlog(other.server_backlog),
     connected_sockets(other.connected_sockets),
     connected_sockets_set(other.connected_sockets_set),
-    cachedFiles(other.cachedFiles)
+    cachedFiles(other.cachedFiles),
+    acceptedMethods(other.acceptedMethods)
 {
 
 }
@@ -64,6 +73,7 @@ server &server::operator=(const server &other)
         connected_sockets = other.connected_sockets;
         connected_sockets_set = other.connected_sockets_set;
         cachedFiles = other.cachedFiles;
+        acceptedMethods = other.acceptedMethods;
     }
     return (*this);
 }
@@ -167,12 +177,60 @@ void server::handle_connection(int socket)
 int server::read_client_message(int socket)
 {
     std::map<std::string, std::string> message;
-    std::string tmp;
-    while ((tmp = get_next_line(socket)) != "")
+    std::string tmp = get_next_line(socket);
+    /* check for the validity of request line
+    * should being with a method token
+    * followed by a single space then the request-target
+    * followed by a single space then the protocol version
+    * ends with a CRLF
+    */
+    std::string method = tmp.substr(0, tmp.find_first_of(' '));
+    LOG("method: '" << method << "'");
+    std::string tmp2 = tmp.substr(tmp.find_first_of(' ') + 1);
+    std::string request_target = tmp2.substr(0, tmp2.find_first_of(' '));
+    LOG("request_target: '" << request_target << "'");
+    std::string::size_type index = tmp2.find_first_of(' ');
+    if (index == std::string::npos)
+    {
+        PRINT_HERE();
+        return (ERROR);
+    }
+    std::string protocol_version = tmp2.substr(index + 1);
+    LOG("index: " << index);
+    LOG("protocol version: " << protocol_version);
+
+    LOG(tmp);
+
+    if (acceptedMethods.count(method) == 0)
+    {
+        PRINT_HERE();
+        return (ERROR); /* 400 bad request (syntax error) */
+    }
+    if (cachedFiles.count(request_target) == 0) /* 404 not found */
+    {
+        PRINT_HERE();
+        return (ERROR);
+    }
+    TERMINATE(protocol_version.c_str());
+    if (protocol_version != std::string("HTTP/1.1\n")) /* 426 upgrade on protocol is required */
+    {
+        PRINT_HERE();
+        return (ERROR);
+    }
+
+    while ((tmp = get_next_line(socket)).size())
     {
         LOG(tmp);
-        message[tmp] = "";
+        std::string::size_type index = tmp.find_first_of(':');
+        if (index == std::string::npos)
+            return (ERROR); /* 400 bad request (syntax error) */
+        std::string key = tmp.substr(0, index);
+        message[key] = tmp.substr(index + 1);
     }
+    PRINT_HERE();
+    for (std::map<std::string, std::string>::const_iterator cit = message.begin(); cit != message.end(); ++cit)
+        LOG(cit->first << " " << cit->second);
+    PRINT_HERE();
     return (parse_message(message));
 }
 
