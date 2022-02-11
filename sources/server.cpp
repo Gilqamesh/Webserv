@@ -1,5 +1,6 @@
 #include "server.hpp"
 #include "HandleHTTPRequest.hpp"
+#include "Utils.hpp"
 
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
@@ -165,14 +166,13 @@ void server::handle_connection(int socket)
 */
 int server::read_client_message(int socket)
 {
-    std::string message;
-    char buffer[10] = { 0 };
-    while (read(socket, buffer, 10) > 0)
+    std::map<std::string, std::string> message;
+    std::string tmp;
+    while ((tmp = get_next_line(socket)) != "")
     {
-        message += buffer;
-        buffer[0] = '\0';
+        LOG(tmp);
+        message[tmp] = "";
     }
-    message += buffer;
     return (parse_message(message));
 }
 
@@ -180,9 +180,8 @@ int server::read_client_message(int socket)
 * parses the message and return a request
 * don't know what makes most sense to handle header communication yet..
 */
-int server::parse_message(const std::string& message)
+int server::parse_message(const std::map<std::string, std::string>& message)
 {
-    LOG(message);
     HandleHTTPRequest client_http_request(message);
     return (client_http_request.get_request_code());
 }

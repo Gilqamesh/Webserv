@@ -5,7 +5,7 @@ HandleHTTPRequest::HandleHTTPRequest()
 
 }
 
-HandleHTTPRequest::HandleHTTPRequest(const std::string &request)
+HandleHTTPRequest::HandleHTTPRequest(const std::map<std::string, std::string> &request)
     : request_message(request), cache_control(), request_code()
 {
     

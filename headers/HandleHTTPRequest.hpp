@@ -8,7 +8,7 @@ class HandleHTTPRequest
 {
 public:
     HandleHTTPRequest();
-    HandleHTTPRequest(const std::string &request);
+    HandleHTTPRequest(const std::map<std::string, std::string> &request);
     HandleHTTPRequest(const HandleHTTPRequest& other);
     HandleHTTPRequest &operator=(const HandleHTTPRequest& other);
     ~HandleHTTPRequest();
@@ -16,7 +16,7 @@ public:
     int get_request_code(void);
 
 private:
-    std::string                         request_message;
+    std::map<std::string, std::string>  request_message; /* message-header -> field-name */
     std::map<std::string, std::string>  cache_control;
     int                                 request_code;
 

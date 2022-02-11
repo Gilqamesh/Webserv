@@ -8,6 +8,8 @@ source_directory = sources
 object_directory = objects
 server_name = server
 client_name = client
+server_objs = $(object_directory)/server.o $(object_directory)/server_test.o $(object_directory)/Utils.o \
+			  $(object_directory)/HandleHTTPRequest.o
 
 $(name): $(object_directory)/$(source_files:.cpp=.o)
 	$(compiler) $(link_flags) -o $@ $^
@@ -18,8 +20,8 @@ $(object_directory)/main.o: $(source_directory)/main.cpp
 $(object_directory)/%.o: $(source_directory)/%.cpp
 	cd $(object_directory) && $(compiler) $(compile_flags) -I../$(header_directory) -c ../$<
 
-$(server_name): $(object_directory)/server.o $(object_directory)/server_test.o $(header_directory)/server.hpp $(header_directory)/header.hpp
-	$(compiler) $(link_flags) -o $@ $(object_directory)/server.o $(object_directory)/server_test.o
+$(server_name): $(server_objs) $(header_directory)/server.hpp $(header_directory)/header.hpp
+	$(compiler) $(link_flags) -o $@ $(server_objs)
 
 .PHONY: all clean re fclean bonus server client
 all:

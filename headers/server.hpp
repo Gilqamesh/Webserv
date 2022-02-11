@@ -29,7 +29,7 @@ private:
     void    cut_connection(int socket);
     void    handle_connection(int socket);
     int     read_client_message(int socket);
-    int     parse_message(const std::string& message);
+    int     parse_message(const std::map<std::string, std::string>& message);
     void    router(int socket, int request);
 
     enum requestCodes
