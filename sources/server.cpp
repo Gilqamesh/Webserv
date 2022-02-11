@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "HandleHTTPRequest.hpp"
 
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
@@ -152,7 +153,54 @@ void server::cut_connection(int socket)
 
 void server::handle_connection(int socket)
 {
-    std::string msg("HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: " + std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"]);
-    write(socket, msg.c_str(), msg.length());
+    int request = read_client_message(socket);
+    router(socket, request);
     cut_connection(socket);
+}
+
+/*
+* returns with the request
+* for now read until EOF, but this is not good practice
+* because client can make the server hang
+*/
+int server::read_client_message(int socket)
+{
+    std::string message;
+    char buffer[10] = { 0 };
+    while (read(socket, buffer, 10) > 0)
+    {
+        message += buffer;
+        buffer[0] = '\0';
+    }
+    message += buffer;
+    return (parse_message(message));
+}
+
+/*
+* parses the message and return a request
+* don't know what makes most sense to handle header communication yet..
+*/
+int server::parse_message(const std::string& message)
+{
+    LOG(message);
+    HandleHTTPRequest client_http_request(message);
+    return (client_http_request.get_request_code());
+}
+
+/*
+* serves request on socket
+*/
+void server::router(int socket, int request)
+{
+    std::string message;
+    if (request == INDEX)
+        message = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: "
+        + std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
+    else if (request == ABOUT)
+        message = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: "
+        + std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
+    else
+        message = "HTTP/1.1 404 OK\nContent-Type:text/html\nContent-Length: "
+        + std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
+    write(socket, message.c_str(), message.length());
 }

@@ -28,6 +28,16 @@ private:
     void    accept_connection(void);
     void    cut_connection(int socket);
     void    handle_connection(int socket);
+    int     read_client_message(int socket);
+    int     parse_message(const std::string& message);
+    void    router(int socket, int request);
+
+    enum requestCodes
+    {
+        INDEX,
+        ABOUT,
+        ERROR
+    };
 };
 
 #endif
