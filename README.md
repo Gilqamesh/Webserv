@@ -18,5 +18,3 @@ Usage of select: https://www.youtube.com/watch?v=Y6pFtgRdUts&list=PL9IEJIKnBJjH_
 HTTP Made Really Easy - A Practical Guide to Writing Clients and Servers: https://www.jmarshall.com/easy/http/
 
 CGI Made Really Easy or, Writing CGI scripts to process Web forms: https://www.jmarshall.com/easy/cgi/
-
-CGI-Script: https://www.jmarshall.com/easy/cgi/german/getcgi.c.txt
