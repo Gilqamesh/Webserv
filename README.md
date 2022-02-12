@@ -20,3 +20,5 @@ HTTP Made Really Easy - A Practical Guide to Writing Clients and Servers: https:
 CGI Made Really Easy or, Writing CGI scripts to process Web forms: https://www.jmarshall.com/easy/cgi/
 
 Trello board for features/bugs: https://trello.com/b/uIzlqPtV/webserv
+
+I/O Multiplexing (select vs. poll vs. epoll/kqueue): https://nima101.github.io/io_multiplexing
