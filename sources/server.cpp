@@ -3,6 +3,9 @@
 #include "Utils.hpp"
 #include <cstdio>
 
+/*
+* helper to initialize some constants
+*/
 void server::initialize_constants(void)
 {
     /* add allowed request methods for clients */
@@ -66,7 +69,8 @@ server::server(const server &other)
     connected_sockets(other.connected_sockets),
     connected_sockets_set(other.connected_sockets_set),
     cachedFiles(other.cachedFiles),
-    accepted_request_methods(other.accepted_request_methods)
+    accepted_request_methods(other.accepted_request_methods),
+    header_whitespace_characters(other.header_whitespace_characters)
 {
 
 }
@@ -82,6 +86,7 @@ server &server::operator=(const server &other)
         connected_sockets_set = other.connected_sockets_set;
         cachedFiles = other.cachedFiles;
         accepted_request_methods = other.accepted_request_methods;
+        header_whitespace_characters = other.header_whitespace_characters;
     }
     return (*this);
 }
@@ -91,6 +96,10 @@ server::~server()
     close(server_socket_fd);
 }
 
+/*
+* main loop of the server
+* waits for new connections or handles already established connections
+*/
 void server::server_listen(void)
 {
     while (true)
@@ -121,6 +130,9 @@ void server::server_listen(void)
     }
 }
 
+/*
+* method to load in a file from 'path' to match a specific 'route'
+*/
 void server::cache_file(const std::string &path, const std::string &route)
 {
     if (cachedFiles.count(route))
@@ -141,6 +153,9 @@ void server::cache_file(const std::string &path, const std::string &route)
     cachedFiles[route] = content;
 }
 
+/*
+* accept and store the new connection from the server socket
+*/
 void server::accept_connection(void)
 {
     /* do not accept connection if the backlog is full */
@@ -161,6 +176,9 @@ void server::accept_connection(void)
     LOG("Client joined from socket: " << new_socket);
 }
 
+/*
+* close and delete 'socket' from the connection list
+*/
 void server::cut_connection(int socket)
 {
     /* close socket after we are done communicating */
@@ -170,6 +188,9 @@ void server::cut_connection(int socket)
     LOG("Client disconnected on socket: " << socket);
 }
 
+/*
+* handle the ready to read/write socket
+*/
 void server::handle_connection(int socket)
 {
     int status_code = parse_request_header(socket);
@@ -189,32 +210,18 @@ int server::parse_request_header(int socket)
     std::unordered_map<std::string, std::string> message;
     std::string current_line = get_next_line(socket);
     /* Read and store request line
-    * syntax checking for the request line happens here (rfc7230/3.1.1.) - this part could be
-    *   done better with regex
+    * syntax checking for the request line happens here (rfc7230/3.1.1.)
     */
-    std::string method = current_line.substr(0, current_line.find_first_of(' '));
-    std::string tmp = current_line.substr(current_line.find_first_of(' ') + 1);
-    std::string request_target = tmp.substr(0, tmp.find_first_of(' '));
-    std::string::size_type index = tmp.find_first_of(' ');
-    if (index == std::string::npos) /* 400 bad request (syntax error) */
-        return (ERROR);
-    std::string protocol_version = tmp.substr(index + 1);
-    if (accepted_request_methods.count(method) == 0) /* 400 bad request (syntax error) */
-        return (ERROR);
-    if (cachedFiles.count(request_target) == 0) /* 404 not found */
-        return (ERROR);
-    assert(CRLF == "\x0d"); /* CR without LF for some reason, maybe get_next_line above is messed up */
-    if (protocol_version != "HTTP/1.1" + CRLF) /* 426 upgrade on protocol is required */
+    if (match_pattern(current_line, "[^ ]* [^ ]* [^ ]*" + CRLF) == false)
         return (ERROR);
     message["request-line"] = current_line.substr(0, current_line.find_first_of(CRLF));
-    LOG(message["request-line"]);
 
     bool first_header_field = true;
     /* Read and store header fields
     * store each key value pair in 'message'
     * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
     * syntax checking for the header fields happens here
-    * if wrong syntax: server must reject the message, proxy should remove them
+    * if wrong syntax: server must reject the message, proxy should remove the wrongly formatted header field
     * bad (BWS) and optional whitespaces (OWS) are getting removed here
     */
     /* Header field format (rfc7230/3.2.)
@@ -228,25 +235,12 @@ int server::parse_request_header(int socket)
             first_header_field = false;
         }
         if (current_line == CRLF)
-            break ;
-        std::string::iterator it = current_line.begin();
-        while (it != current_line.end() && *it != ':')
-        {
-            if (header_whitespace_characters.count(*it))
-                return (ERROR); /* 400 bad request (syntax error) */
-            ++it;
-        }
-        if (it == current_line.end())
+            break ; /* end of header */
+        if (match_pattern(current_line, "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF) == false)
             return (ERROR); /* 400 bad request (syntax error) */
-        std::string field_name(current_line.begin(), it);
-        ++it;
-        while (it != current_line.end() && header_whitespace_characters.count(*it)) /* remove preceding whitespaces */
-            ++it;
-        if (it == current_line.end())
-            return (ERROR); /* 400 bad request (syntax error) */
-        std::string field_value(it, current_line.end());
-        std::string field_value_clean(field_value.substr(field_value.find_first_not_of(HEADER_WHITESPACES), field_value.find_first_of(HEADER_WHITESPACES)));
-        message[field_name] = field_value_clean.substr(0, field_value.find_last_of(CRLF));
+        std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
+        std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
+        message[field_name] = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
     }
     return (parse_message(message));
 }
@@ -262,7 +256,7 @@ int server::parse_message(const std::unordered_map<std::string, std::string>& me
 }
 
 /*
-* serves request on socket
+* responds to 'socket' based on set parameters
 */
 void server::router(int socket, int status_code, int request)
 {

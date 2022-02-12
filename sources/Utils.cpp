@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdlib>
+#include <unordered_set>
 #ifndef OPEN_MAX
 # define OPEN_MAX 1000
 #endif
@@ -72,4 +73,132 @@ std::string get_next_line(int fd)
         cur_line += *cur;
     std::memmove(buffers[fd], newline_index + 1, BUFFER_SIZE - (newline_index - buffers[fd]));
     return (cur_line);
+}
+
+/*
+* !! Warning: 'pattern' must be properly formatted !!
+*
+* Usage
+* works similar to regex, returns true only if the entire 'str'
+* matches the 'pattern'
+*
+* Syntax
+* a+            one or more
+* a*            zero or more
+* [abc]         any of a, b or c
+* [^abc]        not a, b or c
+* [a-g]         character between a & g
+* c             match character c
+* .             any character except newline
+* \             escape the next character
+* 
+* Not implemented
+// * a?            0 or 1
+// * ^abc$         start / end of the string
+// * a{5} a{2,}    exactly five, two or more
+// * a{1,3}        between one & three
+*/
+bool match_pattern(const std::string &str, const std::string &pattern)
+{
+    std::string::const_reverse_iterator s = str.rbegin();
+    std::string::const_reverse_iterator p = pattern.rbegin();
+    while (s != str.rend() && p != pattern.rend())
+    {
+        if (p + 1 != pattern.rend() && *(p + 1) == '\\')
+        {
+            if (*s++ != *p++)
+                return (false);
+            ++p; /* skip over '\' */
+        }
+        else if (*p == '*' || *p == '+')
+        {
+            char current_control_character = *p;
+            std::unordered_set<char> token_range;
+            bool negate = false;
+            ++p; /* skip over current control character */
+            if (*p == ']') {
+                while (*++p != '[')
+                {
+                    if (*(p + 1) == '[' && *p == '^')
+                        negate = true;
+                    else
+                    {
+                        token_range.insert(*p);
+                        if (*(p + 1) == '\\')
+                            ++p; /* skip over '\' */
+                    }
+                }
+            } else {
+                if (*p == '.') /* skip 's' until next rule in pattern matches */
+                {
+                    ++p; /* skip over '.' */
+                    bool matched = true;
+                    while (s != str.rend() && *s != '\n' && match_pattern(std::string(str.begin(), s.base()), std::string(pattern.begin(), p.base())) == false)
+                    {
+                        matched = false;
+                        ++s;
+                    }
+                    if (current_control_character == '+' && matched == true)
+                        return (false);
+                    continue ;
+                }
+                token_range.insert(*p);
+            }
+            /* [a-g] */
+            if (match_pattern(std::string(p.base() + negate, p.base() + 3 + negate), ".-."))
+            {
+                token_range.clear();
+                for (char c = *(p.base() + negate); c != *(p.base() + 2 + negate); ++c)
+                    token_range.insert(c);
+            }
+            ++p; /* skip '[' for next token */
+            // bool first_time = true;
+            /* check the current pattern in 'str' until the next rule in pattern matches */
+            if (current_control_character == '+' && (negate == true ? token_range.count(*s) : token_range.count(*s) == 0))
+                return (false);
+            if (current_control_character == '+')
+                ++s;
+            while (s != str.rend() && (negate == true ? token_range.count(*s) == 0 : token_range.count(*s))
+                && match_pattern(std::string(str.begin(), s.base()), std::string(pattern.begin(), p.base())) == false)
+                ++s;
+        }
+        else if (*p == ']')
+        {
+            std::unordered_set<char> token_range;
+            bool negate = false;
+            while (*++p != '[')
+            {
+                if (*(p + 1) == '[' && *p == '^')
+                    negate = true;
+                else
+                {
+                    token_range.insert(*p);
+                    if (*(p + 1) == '\\')
+                        ++p; /* skip over '\' */
+                }
+            }
+            /* [a-g] */
+            if (match_pattern(std::string(p.base() + negate, p.base() + 3 + negate), ".-."))
+            {
+                token_range.clear();
+                for (char c = *(p.base() + negate); c != *(p.base() + 2 + negate); ++c)
+                    token_range.insert(c);
+            }
+            ++p; /* skip '[' for next token */
+            if (negate == true ? token_range.count(*s++) : token_range.count(*s++) == 0)
+                return (false); /* match failed */
+        }
+        else if (*p == '.')
+        {
+            if (*s++ == '\n')
+                return (false);
+            ++p;
+        }
+        else /* match a single character */
+        {
+            if (*p++ != *s++)
+                return (false);
+        }
+    }
+    return (s == str.rend() && p == pattern.rend());
 }

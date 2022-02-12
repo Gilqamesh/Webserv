@@ -2,7 +2,7 @@ name = webserv
 compile_flags = -Wall -Wextra -Werror -std=c++98
 link_flags =
 compiler = clang++
-source_files = main.cpp
+source_files = main.cpp Utils.cpp
 header_directory = headers
 source_directory = sources
 object_directory = objects
@@ -11,7 +11,7 @@ client_name = client
 server_objs = $(object_directory)/server.o $(object_directory)/server_test.o $(object_directory)/Utils.o \
 			  $(object_directory)/HandleHTTPRequest.o
 
-$(name): $(object_directory)/$(source_files:.cpp=.o)
+$(name): $(foreach file,$(source_files:.cpp=.o),$(object_directory)/$(file))
 	$(compiler) $(link_flags) -o $@ $^
 
 $(object_directory)/main.o: $(source_directory)/main.cpp
