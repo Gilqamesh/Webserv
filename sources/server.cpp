@@ -3,15 +3,23 @@
 #include "Utils.hpp"
 #include <cstdio>
 
+void server::initialize_constants(void)
+{
+    /* add allowed request methods for clients */
+    accepted_request_methods.insert("GET");
+    accepted_request_methods.insert("POST");
+    accepted_request_methods.insert("DELETE");
+    /* whitespaces in header fields rfc7230/3.2.3 */
+    header_whitespace_characters.insert(' ');
+    header_whitespace_characters.insert('\t');
+}
+
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
 {
-    /*
-    * add allowed methods for clients
-    */
-    acceptedMethods.insert("GET");
-    acceptedMethods.insert("POST");
-    acceptedMethods.insert("DELETE");
+    // PRINT_HERE();
+    initialize_constants();
+    // PRINT_HERE();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
@@ -58,7 +66,7 @@ server::server(const server &other)
     connected_sockets(other.connected_sockets),
     connected_sockets_set(other.connected_sockets_set),
     cachedFiles(other.cachedFiles),
-    acceptedMethods(other.acceptedMethods)
+    accepted_request_methods(other.accepted_request_methods)
 {
 
 }
@@ -73,7 +81,7 @@ server &server::operator=(const server &other)
         connected_sockets = other.connected_sockets;
         connected_sockets_set = other.connected_sockets_set;
         cachedFiles = other.cachedFiles;
-        acceptedMethods = other.acceptedMethods;
+        accepted_request_methods = other.accepted_request_methods;
     }
     return (*this);
 }
@@ -164,73 +172,82 @@ void server::cut_connection(int socket)
 
 void server::handle_connection(int socket)
 {
-    int request = read_client_message(socket);
-    router(socket, request);
+    int status_code = parse_request_header(socket);
+    router(socket, status_code, INDEX);
     cut_connection(socket);
 }
 
-/*
-* returns with the request
-* for now read until EOF, but this is not good practice
-* because client can make the server hang
+/* Message format (rfc7230/3.)
+* 1. start-line (request-line for request, status-line for response)
+* 2. *( header-field CRLF)
+* 3. CRLF
+* 4. optional message-body (not implemented)
+* Return value: http status code
 */
-int server::read_client_message(int socket)
+int server::parse_request_header(int socket)
 {
-    std::map<std::string, std::string> message;
-    std::string tmp = get_next_line(socket);
-    /* check for the validity of request line
-    * should being with a method token
-    * followed by a single space then the request-target
-    * followed by a single space then the protocol version
-    * ends with a CRLF
+    std::unordered_map<std::string, std::string> message;
+    std::string current_line = get_next_line(socket);
+    /* Read and store request line
+    * syntax checking for the request line happens here (rfc7230/3.1.1.) - this part could be
+    *   done better with regex
     */
-    std::string method = tmp.substr(0, tmp.find_first_of(' '));
-    LOG("method: '" << method << "'");
-    std::string tmp2 = tmp.substr(tmp.find_first_of(' ') + 1);
-    std::string request_target = tmp2.substr(0, tmp2.find_first_of(' '));
-    LOG("request_target: '" << request_target << "'");
-    std::string::size_type index = tmp2.find_first_of(' ');
-    if (index == std::string::npos)
-    {
-        PRINT_HERE();
+    std::string method = current_line.substr(0, current_line.find_first_of(' '));
+    std::string tmp = current_line.substr(current_line.find_first_of(' ') + 1);
+    std::string request_target = tmp.substr(0, tmp.find_first_of(' '));
+    std::string::size_type index = tmp.find_first_of(' ');
+    if (index == std::string::npos) /* 400 bad request (syntax error) */
         return (ERROR);
-    }
-    std::string protocol_version = tmp2.substr(index + 1);
-    LOG("index: " << index);
-    LOG("protocol version: " << protocol_version);
-
-    LOG(tmp);
-
-    if (acceptedMethods.count(method) == 0)
-    {
-        PRINT_HERE();
-        return (ERROR); /* 400 bad request (syntax error) */
-    }
+    std::string protocol_version = tmp.substr(index + 1);
+    if (accepted_request_methods.count(method) == 0) /* 400 bad request (syntax error) */
+        return (ERROR);
     if (cachedFiles.count(request_target) == 0) /* 404 not found */
-    {
-        PRINT_HERE();
         return (ERROR);
-    }
-    TERMINATE(protocol_version.c_str());
-    if (protocol_version != std::string("HTTP/1.1\n")) /* 426 upgrade on protocol is required */
-    {
-        PRINT_HERE();
+    assert(CRLF == "\x0d"); /* CR without LF for some reason, maybe get_next_line above is messed up */
+    if (protocol_version != "HTTP/1.1" + CRLF) /* 426 upgrade on protocol is required */
         return (ERROR);
-    }
+    message["request-line"] = current_line.substr(0, current_line.find_first_of(CRLF));
+    LOG(message["request-line"]);
 
-    while ((tmp = get_next_line(socket)).size())
+    bool first_header_field = true;
+    /* Read and store header fields
+    * store each key value pair in 'message'
+    * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
+    * syntax checking for the header fields happens here
+    * if wrong syntax: server must reject the message, proxy should remove them
+    * bad (BWS) and optional whitespaces (OWS) are getting removed here
+    */
+    /* Header field format (rfc7230/3.2.)
+    * field-name ":" OWS field-value OWS
+    */
+    while ((current_line = get_next_line(socket)).size())
     {
-        LOG(tmp);
-        std::string::size_type index = tmp.find_first_of(':');
-        if (index == std::string::npos)
+        if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whietspace between the start-line and the first header field */
+            if (header_whitespace_characters.count(current_line[0]))
+                return (ERROR); /* 400 bad request (syntax error) */
+            first_header_field = false;
+        }
+        if (current_line == CRLF)
+            break ;
+        std::string::iterator it = current_line.begin();
+        while (it != current_line.end() && *it != ':')
+        {
+            if (header_whitespace_characters.count(*it))
+                return (ERROR); /* 400 bad request (syntax error) */
+            ++it;
+        }
+        if (it == current_line.end())
             return (ERROR); /* 400 bad request (syntax error) */
-        std::string key = tmp.substr(0, index);
-        message[key] = tmp.substr(index + 1);
+        std::string field_name(current_line.begin(), it);
+        ++it;
+        while (it != current_line.end() && header_whitespace_characters.count(*it)) /* remove preceding whitespaces */
+            ++it;
+        if (it == current_line.end())
+            return (ERROR); /* 400 bad request (syntax error) */
+        std::string field_value(it, current_line.end());
+        std::string field_value_clean(field_value.substr(field_value.find_first_not_of(HEADER_WHITESPACES), field_value.find_first_of(HEADER_WHITESPACES)));
+        message[field_name] = field_value_clean.substr(0, field_value.find_last_of(CRLF));
     }
-    PRINT_HERE();
-    for (std::map<std::string, std::string>::const_iterator cit = message.begin(); cit != message.end(); ++cit)
-        LOG(cit->first << " " << cit->second);
-    PRINT_HERE();
     return (parse_message(message));
 }
 
@@ -238,7 +255,7 @@ int server::read_client_message(int socket)
 * parses the message and return a request
 * don't know what makes most sense to handle header communication yet..
 */
-int server::parse_message(const std::map<std::string, std::string>& message)
+int server::parse_message(const std::unordered_map<std::string, std::string>& message)
 {
     HandleHTTPRequest client_http_request(message);
     return (client_http_request.get_request_code());
@@ -247,17 +264,18 @@ int server::parse_message(const std::map<std::string, std::string>& message)
 /*
 * serves request on socket
 */
-void server::router(int socket, int request)
+void server::router(int socket, int status_code, int request)
 {
-    std::string message;
+    /* construct response message
+    *
+    * first line is the Status Line (rfc7230/3.1.2.)
+    */
+    std::string message = "HTTP/1.1 " + std::to_string(status_code) + "\nContent-Type:text/html\nContent-Length: ";
     if (request == INDEX)
-        message = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: "
-        + std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
+        message += std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
     else if (request == ABOUT)
-        message = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: "
-        + std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
+        message += std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
     else
-        message = "HTTP/1.1 404 OK\nContent-Type:text/html\nContent-Length: "
-        + std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
+        message += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
     write(socket, message.c_str(), message.length());
 }

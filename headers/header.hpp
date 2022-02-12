@@ -25,5 +25,6 @@
 # define PRINT_HERE() (LOG(__FILE__ << " " << __LINE__))
 /* in seconds */
 # define TIMEOUT_TO_CUT_CONNECTION      5
+# define CRLF std::string("\x0d")
 
 #endif

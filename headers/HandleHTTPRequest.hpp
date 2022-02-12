@@ -2,13 +2,13 @@
 # define HANDLEHTTPREQUEST_HPP
 
 # include <string>
-# include <map>
+# include <unordered_map>
 
 class HandleHTTPRequest
 {
 public:
     HandleHTTPRequest();
-    HandleHTTPRequest(const std::map<std::string, std::string> &request);
+    HandleHTTPRequest(const std::unordered_map<std::string, std::string> &request);
     HandleHTTPRequest(const HandleHTTPRequest& other);
     HandleHTTPRequest &operator=(const HandleHTTPRequest& other);
     ~HandleHTTPRequest();
@@ -16,8 +16,8 @@ public:
     int get_request_code(void);
 
 private:
-    std::map<std::string, std::string>  request_message; /* message-header -> field-name */
-    std::map<std::string, std::string>  cache_control;
+    std::unordered_map<std::string, std::string>    request_message; /* message-header -> field-name */
+    std::unordered_map<std::string, std::string>    cache_control;
     int                                 request_code;
 
     void handle_cache_control(void);
