@@ -6,8 +6,11 @@
 # include <map>
 # include <unordered_map>
 # include <vector>
+# include "http_message.hpp"
 
 # define HEADER_WHITESPACES " \t"
+# define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
+# define HEADER_REQUEST_LINE_PATTERN "[^ ]* [^ ]* [^ ]*" + CRLF
 
 class server
 {
@@ -32,14 +35,14 @@ public:
 private:
     server();
 
-    void    accept_connection(void);
-    void    cut_connection(int socket);
-    void    handle_connection(int socket);
-    int     parse_request_header(int socket);
-    int     parse_message(const std::unordered_map<std::string, std::string>& message);
-    void    router(int socket, int status_code, int request);
+    void            accept_connection(void);
+    void            cut_connection(int socket);
+    void            handle_connection(int socket);
+    http_message    parse_request_header(int socket);
+    http_message    parse_message(const http_message& message);
+    void            router(int socket, const http_message& request);
 
-    void    initialize_constants(void); // helper
+    void            initialize_constants(void); // helper
 
     enum requestCodes
     {

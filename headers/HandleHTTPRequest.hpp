@@ -3,12 +3,13 @@
 
 # include <string>
 # include <unordered_map>
+# include "http_message.hpp"
 
 class HandleHTTPRequest
 {
 public:
     HandleHTTPRequest();
-    HandleHTTPRequest(const std::unordered_map<std::string, std::string> &request);
+    HandleHTTPRequest(const http_message &message);
     HandleHTTPRequest(const HandleHTTPRequest& other);
     HandleHTTPRequest &operator=(const HandleHTTPRequest& other);
     ~HandleHTTPRequest();
@@ -16,9 +17,8 @@ public:
     int get_request_code(void);
 
 private:
-    std::unordered_map<std::string, std::string>    request_message; /* message-header -> field-name */
-    std::unordered_map<std::string, std::string>    cache_control;
-    int                                 request_code;
+    http_message    request_message;
+    int             request_code;
 
     void handle_cache_control(void);
     void handle_expect(void);

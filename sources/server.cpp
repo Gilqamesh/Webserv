@@ -131,7 +131,7 @@ void server::server_listen(void)
 }
 
 /*
-* method to load in a file from 'path' to match a specific 'route'
+* load a file from 'path' to match a specific 'route'
 */
 void server::cache_file(const std::string &path, const std::string &route)
 {
@@ -193,32 +193,37 @@ void server::cut_connection(int socket)
 */
 void server::handle_connection(int socket)
 {
-    int status_code = parse_request_header(socket);
-    router(socket, status_code, INDEX);
+    router(socket, parse_request_header(socket));
     cut_connection(socket);
 }
 
-/* Message format (rfc7230/3.)
+/* Message format (rfc7230/3.) -- CURRENTLY FOR REQUEST ONLY
 * 1. start-line (request-line for request, status-line for response)
 * 2. *( header-field CRLF)
 * 3. CRLF
 * 4. optional message-body (not implemented)
 * Return value: http status code
 */
-int server::parse_request_header(int socket)
+http_message server::parse_request_header(int socket)
 {
-    std::unordered_map<std::string, std::string> message;
+    http_message message(false);
     std::string current_line = get_next_line(socket);
     /* Read and store request line
     * syntax checking for the request line happens here (rfc7230/3.1.1.)
     */
-    if (match_pattern(current_line, "[^ ]* [^ ]* [^ ]*" + CRLF) == false)
-        return (ERROR);
-    message["request-line"] = current_line.substr(0, current_line.find_first_of(CRLF));
+    if (match_pattern(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
+        return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
+    message.method_token = current_line.substr(0, current_line.find_first_of(' '));
+    message.target = current_line.substr(message.method_token.size() + 1);
+    message.target = message.target.substr(0, message.target.find_first_of(' '));
+    message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
+    message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
+
+    LOG("Target: '" << message.target << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
-    * store each key value pair in 'message'
+    * store each key value pair in 'header_fields'
     * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
     * syntax checking for the header fields happens here
     * if wrong syntax: server must reject the message, proxy should remove the wrongly formatted header field
@@ -231,16 +236,16 @@ int server::parse_request_header(int socket)
     {
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whietspace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
-                return (ERROR); /* 400 bad request (syntax error) */
+                return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
             first_header_field = false;
         }
         if (current_line == CRLF)
             break ; /* end of header */
-        if (match_pattern(current_line, "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF) == false)
-            return (ERROR); /* 400 bad request (syntax error) */
+        if (match_pattern(current_line, HEADER_FIELD_PATTERN) == false)
+            return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
         std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
         std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
-        message[field_name] = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
+        message.header_fields[field_name] = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
     }
     return (parse_message(message));
 }
@@ -249,27 +254,32 @@ int server::parse_request_header(int socket)
 * parses the message and return a request
 * don't know what makes most sense to handle header communication yet..
 */
-int server::parse_message(const std::unordered_map<std::string, std::string>& message)
+http_message server::parse_message(const http_message &message)
 {
-    HandleHTTPRequest client_http_request(message);
-    return (client_http_request.get_request_code());
+    return (message);
+    // HandleHTTPRequest client_http_request(message);
+    // return (client_http_request.get_request_code());
 }
 
 /*
 * responds to 'socket' based on set parameters
 */
-void server::router(int socket, int status_code, int request)
+void server::router(int socket, const http_message& message)
 {
     /* construct response message
     *
     * first line is the Status Line (rfc7230/3.1.2.)
     */
-    std::string message = "HTTP/1.1 " + std::to_string(status_code) + "\nContent-Type:text/html\nContent-Length: ";
-    if (request == INDEX)
-        message += std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
-    else if (request == ABOUT)
-        message += std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
+    std::string response = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: ";
+    if (message.target == "/")
+        response += std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
+    else if (message.target == "/about")
+        response += std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
+    else if (message.target == "/error" || message.reject == true)
+        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
     else
-        message += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
-    write(socket, message.c_str(), message.length());
+        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
+    // else
+    //     assert(false); /* not implemented */
+    write(socket, response.c_str(), response.length());
 }

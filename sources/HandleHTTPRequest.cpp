@@ -5,14 +5,14 @@ HandleHTTPRequest::HandleHTTPRequest()
 
 }
 
-HandleHTTPRequest::HandleHTTPRequest(const std::unordered_map<std::string, std::string> &request)
-    : request_message(request), cache_control(), request_code()
+HandleHTTPRequest::HandleHTTPRequest(const http_message &message)
+    : request_message(message), request_code()
 {
     
 }
 
 HandleHTTPRequest::HandleHTTPRequest(const HandleHTTPRequest &other)
-    : request_message(other.request_message), cache_control(other.cache_control), request_code(other.request_code)
+    : request_message(other.request_message), request_code(other.request_code)
 {
 
 }
@@ -22,7 +22,6 @@ HandleHTTPRequest &HandleHTTPRequest::operator=(const HandleHTTPRequest& other)
     if (this != &other)
     {
         request_message = other.request_message;
-        cache_control = other.cache_control;
         request_code = other.request_code;
     }
     return (*this);
