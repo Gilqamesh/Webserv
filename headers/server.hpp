@@ -3,6 +3,7 @@
 
 # include "header.hpp"
 # include <set>
+# include <unordered_set>
 # include <map>
 # include <unordered_map>
 # include <vector>
@@ -23,8 +24,8 @@ private:
     std::set<int>                                   connected_sockets_set;
     std::unordered_map<std::string, std::string>    cachedFiles; /* route - content */
     /* constants */
-    std::set<std::string>                           accepted_request_methods;
-    std::set<char>                                  header_whitespace_characters;
+    std::unordered_set<std::string>                 accepted_request_methods;
+    std::unordered_set<char>                        header_whitespace_characters;
 public:
     server(int port, int backlog);
     server(const server& other);

@@ -197,7 +197,7 @@ void server::handle_connection(int socket)
     cut_connection(socket);
 }
 
-/* Message format (rfc7230/3.) -- CURRENTLY FOR REQUEST ONLY
+/* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
 * 1. start-line (request-line for request, status-line for response)
 * 2. *( header-field CRLF)
 * 3. CRLF
@@ -207,12 +207,14 @@ void server::handle_connection(int socket)
 http_request server::parse_request_header(int socket)
 {
     http_request message(false);
-    std::string current_line = get_next_line(socket);
     /* Read and store request line
-    * syntax checking for the request line happens here (rfc7230/3.1.1.)
+    * syntax checking for the request line happens here (RFC7230/3.1.1.)
     */
+    std::string current_line = get_next_line(socket);
+    if (current_line == CRLF) /* RFC7230/3.5. In the interest of robustness... */
+        current_line = get_next_line(socket);
     if (match_pattern(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
-        return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
+        return (http_request::reject_http_request()); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     message.method_token = current_line.substr(0, current_line.find_first_of(' '));
     message.target = current_line.substr(message.method_token.size() + 1);
     message.target = message.target.substr(0, message.target.find_first_of(' '));
@@ -231,12 +233,13 @@ http_request server::parse_request_header(int socket)
     * if wrong syntax: server must reject the message, proxy should remove the wrongly formatted header field
     * bad (BWS) and optional whitespaces (OWS) are getting removed here
     */
-    /* Header field format (rfc7230/3.2.)
+    /* Header field format (RFC7230/3.2.)
     * field-name ":" OWS field-value OWS
     */
     while ((current_line = get_next_line(socket)).size())
     {
-        if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whietspace between the start-line and the first header field */
+        LOG(current_line);
+        if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
                 return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
             first_header_field = false;
@@ -247,7 +250,11 @@ http_request server::parse_request_header(int socket)
             return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
         std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
         std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
-        message.header_fields[field_name] = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
+        std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
+        if (message.header_fields.count(field_name)) /* append field-name with a preceding comma */
+            message.header_fields[field_name] += "," + field_value;
+        else
+            message.header_fields[field_name] = field_value;
     }
     return (parse_message(message));
 }

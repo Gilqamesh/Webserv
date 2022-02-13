@@ -36,7 +36,7 @@ HandleHTTPRequest::~HandleHTTPRequest()
 * Handle request header fields here
 * RFC7231/5.1.
 */
-int HandleHTTPRequest::get_request_code(void)
+int HandleHTTPRequest::get_request_code()
 {
     /* Controls
     * controls are request header fields (key-value pairs) that direct
@@ -66,7 +66,6 @@ void HandleHTTPRequest::handle_expect(void)
 
 void HandleHTTPRequest::handle_host(void)
 {
-
 }
 
 void HandleHTTPRequest::handle_max_forwards(void)
