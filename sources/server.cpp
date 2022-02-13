@@ -1,6 +1,5 @@
 #include "server.hpp"
-#include "HandleHTTPRequest.hpp"
-#include "Utils.hpp"
+#include "utils.hpp"
 #include <cstdio>
 
 /*
@@ -62,37 +61,10 @@ server::server(int port, int backlog)
     FD_SET(server_socket_fd, &connected_sockets);
 }
 
-server::server(const server &other)
-    : server_socket_fd(other.server_socket_fd),
-    server_port(other.server_port),
-    server_backlog(other.server_backlog),
-    connected_sockets(other.connected_sockets),
-    connected_sockets_set(other.connected_sockets_set),
-    cachedFiles(other.cachedFiles),
-    accepted_request_methods(other.accepted_request_methods),
-    header_whitespace_characters(other.header_whitespace_characters)
-{
-
-}
-
-server &server::operator=(const server &other)
-{
-    if (this != &other)
-    {
-        server_socket_fd = other.server_socket_fd;
-        server_port = other.server_port;
-        server_backlog = other.server_backlog;
-        connected_sockets = other.connected_sockets;
-        connected_sockets_set = other.connected_sockets_set;
-        cachedFiles = other.cachedFiles;
-        accepted_request_methods = other.accepted_request_methods;
-        header_whitespace_characters = other.header_whitespace_characters;
-    }
-    return (*this);
-}
-
 server::~server()
 {
+    for (std::set<int>::iterator it = connected_sockets_set.begin(); it != connected_sockets_set.end(); ++it)
+        cut_connection(*it);
     close(server_socket_fd);
 }
 
@@ -188,21 +160,26 @@ void server::cut_connection(int socket)
     LOG("Client disconnected on socket: " << socket);
 }
 
-/*
-* handle the ready to read/write socket
+/* handle the ready to read/write socket
+* 1. Parse request
+* 2. Format request
+* 3. Route request
 */
 void server::handle_connection(int socket)
 {
-    router(socket, parse_request_header(socket));
-    cut_connection(socket);
+    http_request request_message = parse_request_header(socket);
+    format_http_request(request_message);
+    router(socket, request_message);
+    if (request_message.header_fields["Connection"] != "keep-alive")
+        cut_connection(socket);
 }
 
 /* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
+* Fills in http_request object and returns it
 * 1. start-line (request-line for request, status-line for response)
 * 2. *( header-field CRLF)
 * 3. CRLF
 * 4. optional message-body/payload (not implemented -- RFC7230/3.3.)
-* Return value: http status code
 */
 http_request server::parse_request_header(int socket)
 {
@@ -256,18 +233,63 @@ http_request server::parse_request_header(int socket)
         else
             message.header_fields[field_name] = field_value;
     }
-    return (parse_message(message));
+    return (message);
 }
 
 /*
-* parses the message and return a request
-* don't know what makes most sense to handle header communication yet..
+* Handle request header fields here
+* RFC7231/5.1.
 */
-http_request server::parse_message(const http_request &message)
+void server::format_http_request(http_request& request)
 {
-    return (message);
-    // HandleHTTPRequest client_http_request(message);
-    // return (client_http_request.get_request_code());
+    /* Controls
+    * controls are request header fields (key-value pairs) that direct
+    * specific handling of the request
+    */
+    handle_cache_control();
+    handle_expect();
+    handle_host();
+    handle_max_forwards();
+    handle_pragma();
+    handle_range();
+    handle_TE();
+    (void)request;
+}
+
+/* CONTROLS */
+
+void server::handle_cache_control(void)
+{
+
+}
+
+void server::handle_expect(void)
+{
+
+}
+
+void server::handle_host(void)
+{
+}
+
+void server::handle_max_forwards(void)
+{
+
+}
+
+void server::handle_pragma(void)
+{
+
+}
+
+void server::handle_range(void)
+{
+
+}
+
+void server::handle_TE(void)
+{
+
 }
 
 /*
@@ -288,7 +310,5 @@ void server::router(int socket, const http_request& message)
         response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
     else
         response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
-    // else
-    //     assert(false); /* not implemented */
     write(socket, response.c_str(), response.length());
 }

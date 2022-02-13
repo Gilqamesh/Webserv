@@ -28,30 +28,32 @@ private:
     std::unordered_set<char>                        header_whitespace_characters;
 public:
     server(int port, int backlog);
-    server(const server& other);
-    server &operator=(const server& other);
     ~server();
 
     void server_listen(void);
     void cache_file(const std::string &path, const std::string &route);
 private:
     server();
+    server(const server& other);
+    server &operator=(const server& other);
 
     void            accept_connection(void);
     void            cut_connection(int socket);
     void            handle_connection(int socket);
     http_request    parse_request_header(int socket);
-    http_request    parse_message(const http_request& message);
     void            router(int socket, const http_request& request);
 
-    void            initialize_constants(void); // helper
+    /* format http request and its control functions */
+    void            format_http_request(http_request& request);
+    void            handle_cache_control(void);
+    void            handle_expect(void);
+    void            handle_host(void);
+    void            handle_max_forwards(void);
+    void            handle_pragma(void);
+    void            handle_range(void);
+    void            handle_TE(void);
 
-    enum requestCodes
-    {
-        INDEX,
-        ABOUT,
-        ERROR
-    };
+    void            initialize_constants(void); // helper
 };
 
 #endif
