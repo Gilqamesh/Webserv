@@ -14,6 +14,7 @@
 # include <poll.h>          // poll
 # include <sys/select.h>    // select
 # include <pthread.h>       // <thread> is c++11
+# include <csignal>         // to close server socket if process is signalled
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)

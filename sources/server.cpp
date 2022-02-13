@@ -56,15 +56,15 @@ server::server(int port, int backlog)
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
-    connected_sockets_set.insert(server_socket_fd);
+    connected_sockets_set.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
     FD_ZERO(&connected_sockets);
     FD_SET(server_socket_fd, &connected_sockets);
 }
 
 server::~server()
 {
-    for (std::set<int>::iterator it = connected_sockets_set.begin(); it != connected_sockets_set.end(); ++it)
-        cut_connection(*it);
+    while (connected_sockets_set.size())
+        cut_connection(*connected_sockets_set.begin());
     close(server_socket_fd);
 }
 
@@ -86,18 +86,21 @@ void server::server_listen(void)
         * monitors all file descriptors and waits until one of them is ready
         * first argument is the highest possible socket number + 1
         */
-        if (select(*(--connected_sockets_set.end()) + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
+        if (select((--connected_sockets_set.end())->first + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
             TERMINATE("select failed");
-        for (std::set<int>::const_iterator cit = connected_sockets_set.begin(); cit != connected_sockets_set.end(); ++cit)
+        unsigned long current_timestamp = get_current_timestamp();
+        for (std::set<std::pair<int, unsigned long> >::const_iterator cit = connected_sockets_set.begin(); cit != connected_sockets_set.end(); ++cit)
         {
-            if (FD_ISSET(*cit, &ready_sockets))
+            if (FD_ISSET(cit->first, &ready_sockets))
             {
-                if (*cit == server_socket_fd) { /* new connection */
+                if (cit->first == server_socket_fd) { /* new connection */
                     accept_connection();
                 } else { /* connection is ready to write/read */
                     handle_connection(*cit);
                 }
             }
+            else if (cit->first != server_socket_fd && cit->second + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp)
+                cut_connection(*cit);
         }
     }
 }
@@ -130,6 +133,7 @@ void server::cache_file(const std::string &path, const std::string &route)
 */
 void server::accept_connection(void)
 {
+    LOG("Current number of connections: " << connected_sockets_set.size());
     /* do not accept connection if the backlog is full */
     if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog))
         return ;
@@ -144,20 +148,21 @@ void server::accept_connection(void)
     if (new_socket == -1)
         TERMINATE("accept failed");
     FD_SET(new_socket, &connected_sockets);
-    connected_sockets_set.insert(new_socket);
+    connected_sockets_set.insert(std::make_pair<int, unsigned long>(new_socket, get_current_timestamp()));
     LOG("Client joined from socket: " << new_socket);
 }
 
 /*
 * close and delete 'socket' from the connection list
+* TODO: send close response and close connection in stages RFC7230/6.6.
 */
-void server::cut_connection(int socket)
+void server::cut_connection(const std::pair<int, unsigned long>& socket)
 {
     /* close socket after we are done communicating */
-    close(socket);
-    FD_CLR(socket, &connected_sockets);
+    close(socket.first);
+    FD_CLR(socket.first, &connected_sockets);
     connected_sockets_set.erase(socket);
-    LOG("Client disconnected on socket: " << socket);
+    LOG("Client disconnected on socket: " << socket.first);
 }
 
 /* handle the ready to read/write socket
@@ -165,13 +170,29 @@ void server::cut_connection(int socket)
 * 2. Format request
 * 3. Route request
 */
-void server::handle_connection(int socket)
+void server::handle_connection(const std::pair<int, unsigned long>& socket)
 {
-    http_request request_message = parse_request_header(socket);
+    http_request request_message = parse_request_header(socket.first);
     format_http_request(request_message);
-    router(socket, request_message);
-    if (request_message.header_fields["Connection"] != "keep-alive")
+    router(socket.first, request_message);
+    /* RFC7230/6.3. */
+    if (request_message.header_fields["Connection"] == "close")
         cut_connection(socket);
+    else if (request_message.protocol_version >= "HTTP/1.1")
+        /* persistent connection */;
+    else if (request_message.protocol_version == "HTTP/1.0")
+    {
+        if (request_message.header_fields["Connection"] == "keep-alive")
+        {
+            /* NEED: if recipient is not a proxy */
+            /* then persistent connection */
+            /* else cut connection */
+        }
+        else
+            cut_connection(socket);
+    }
+    else
+        assert(false); /* protocol version is not properly parsed */
 }
 
 /* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
@@ -215,7 +236,7 @@ http_request server::parse_request_header(int socket)
     */
     while ((current_line = get_next_line(socket)).size())
     {
-        LOG(current_line);
+        // LOG(current_line); 
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
                 return (http_request::reject_http_request()); /* 400 bad request (syntax error) */

@@ -22,3 +22,5 @@ CGI Made Really Easy or, Writing CGI scripts to process Web forms: https://www.j
 Trello board for features/bugs: https://trello.com/b/uIzlqPtV/webserv
 
 I/O Multiplexing (select vs. poll vs. epoll/kqueue): https://nima101.github.io/io_multiplexing
+
+Header fields (can also be found in RFC7231): https://en.wikipedia.org/wiki/List_of_HTTP_header_fields

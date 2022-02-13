@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unordered_set>
+#include <sys/time.h>
 #ifndef OPEN_MAX
 # define OPEN_MAX 1000
 #endif
@@ -202,4 +203,16 @@ bool match_pattern(const std::string &str, const std::string &pattern)
         }
     }
     return (s == str.rend() && p == pattern.rend());
+}
+
+/*
+* Returns timestamp in microseconds since the Epoch
+*/
+unsigned long get_current_timestamp(void)
+{
+    struct timeval cur;
+
+    if (gettimeofday(&cur, NULL) == -1)
+        TERMINATE("gettimeofday failed");
+    return (cur.tv_sec * 1000000 + cur.tv_usec);
 }
