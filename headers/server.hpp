@@ -10,7 +10,8 @@
 
 # define HEADER_WHITESPACES " \t"
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
-# define HEADER_REQUEST_LINE_PATTERN "[^ ]* [^ ]* [^ ]*" + CRLF
+# define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]+" + CRLF
+# define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*" + CRLF
 
 class server
 {

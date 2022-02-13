@@ -76,7 +76,7 @@ std::string get_next_line(int fd)
 }
 
 /*
-* https://regexr.com/
+* Based on this: https://regexr.com/
 *
 * !! Warning: 'pattern' must be properly formatted !!
 * Usage
