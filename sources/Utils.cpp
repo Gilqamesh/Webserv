@@ -76,8 +76,9 @@ std::string get_next_line(int fd)
 }
 
 /*
-* !! Warning: 'pattern' must be properly formatted !!
+* https://regexr.com/
 *
+* !! Warning: 'pattern' must be properly formatted !!
 * Usage
 * works similar to regex, returns true only if the entire 'str'
 * matches the 'pattern'

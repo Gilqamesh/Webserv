@@ -1,25 +1,25 @@
-#include "http_message.hpp"
+#include "http_request.hpp"
 
-http_message::http_message()
+http_request::http_request()
     : reject(false)
 {
 
 }
 
-http_message::http_message(bool r)
+http_request::http_request(bool r)
     : reject(r)
 {
 
 }
 
-http_message::http_message(const http_message &other)
+http_request::http_request(const http_request &other)
     : method_token(other.method_token), target(other.target), protocol_version(other.protocol_version),
     header_fields(other.header_fields), reject(other.reject)
 {
 
 }
 
-http_message &http_message::operator=(const http_message &other)
+http_request &http_request::operator=(const http_request &other)
 {
     if (this != &other)
     {
@@ -32,12 +32,12 @@ http_message &http_message::operator=(const http_message &other)
     return (*this);
 }
 
-http_message::~http_message()
+http_request::~http_request()
 {
 
 }
 
-http_message http_message::reject_http_message(void)
+http_request http_request::reject_http_request(void)
 {
-    return (http_message(true));
+    return (http_request(true));
 }

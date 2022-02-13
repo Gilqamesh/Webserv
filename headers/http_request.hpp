@@ -1,23 +1,24 @@
-#ifndef HTTPMESSAGE
-# define HTTPMESSAGE
+#ifndef HTTP_REQUEST
+# define HTTP_REQUEST
 
 # include <string>
 # include <unordered_map>
 
-struct http_message
+struct http_request
 {
-    http_message();
-    http_message(bool r);
-    http_message(const http_message &other);
-    http_message &operator=(const http_message &other);
-    ~http_message();
+    http_request();
+    http_request(bool r);
+    http_request(const http_request &other);
+    http_request &operator=(const http_request &other);
+    ~http_request();
 
-    static http_message reject_http_message(void);
+    static http_request reject_http_request(void);
 
     std::string                                     method_token;
     std::string                                     target;
     std::string                                     protocol_version;
     std::unordered_map<std::string, std::string>    header_fields;
+    std::string                                     payload; /* message body RFC7230/3.3.*/
     bool                                            reject;
 };
 

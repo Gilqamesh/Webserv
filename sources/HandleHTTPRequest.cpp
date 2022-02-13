@@ -5,7 +5,7 @@ HandleHTTPRequest::HandleHTTPRequest()
 
 }
 
-HandleHTTPRequest::HandleHTTPRequest(const http_message &message)
+HandleHTTPRequest::HandleHTTPRequest(const http_request &message)
     : request_message(message), request_code()
 {
     

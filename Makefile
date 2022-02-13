@@ -9,7 +9,7 @@ object_directory = objects
 server_name = server
 client_name = client
 server_objs = $(object_directory)/server.o $(object_directory)/server_test.o $(object_directory)/Utils.o \
-			  $(object_directory)/HandleHTTPRequest.o $(object_directory)/http_message.o
+			  $(object_directory)/HandleHTTPRequest.o $(object_directory)/http_request.o
 
 $(name): $(foreach file,$(source_files:.cpp=.o),$(object_directory)/$(file))
 	$(compiler) $(link_flags) -o $@ $^

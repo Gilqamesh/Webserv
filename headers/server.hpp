@@ -6,7 +6,7 @@
 # include <map>
 # include <unordered_map>
 # include <vector>
-# include "http_message.hpp"
+# include "http_request.hpp"
 
 # define HEADER_WHITESPACES " \t"
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
@@ -38,9 +38,9 @@ private:
     void            accept_connection(void);
     void            cut_connection(int socket);
     void            handle_connection(int socket);
-    http_message    parse_request_header(int socket);
-    http_message    parse_message(const http_message& message);
-    void            router(int socket, const http_message& request);
+    http_request    parse_request_header(int socket);
+    http_request    parse_message(const http_request& message);
+    void            router(int socket, const http_request& request);
 
     void            initialize_constants(void); // helper
 

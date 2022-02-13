@@ -201,25 +201,27 @@ void server::handle_connection(int socket)
 * 1. start-line (request-line for request, status-line for response)
 * 2. *( header-field CRLF)
 * 3. CRLF
-* 4. optional message-body (not implemented)
+* 4. optional message-body/payload (not implemented -- RFC7230/3.3.)
 * Return value: http status code
 */
-http_message server::parse_request_header(int socket)
+http_request server::parse_request_header(int socket)
 {
-    http_message message(false);
+    http_request message(false);
     std::string current_line = get_next_line(socket);
     /* Read and store request line
     * syntax checking for the request line happens here (rfc7230/3.1.1.)
     */
     if (match_pattern(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
-        return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
+        return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
     message.method_token = current_line.substr(0, current_line.find_first_of(' '));
     message.target = current_line.substr(message.method_token.size() + 1);
     message.target = message.target.substr(0, message.target.find_first_of(' '));
     message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
     message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
 
+    LOG("Method token: '" << message.method_token << "'");
     LOG("Target: '" << message.target << "'");
+    LOG("Protocol version: '" << message.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
@@ -236,13 +238,13 @@ http_message server::parse_request_header(int socket)
     {
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whietspace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
-                return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
+                return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
             first_header_field = false;
         }
         if (current_line == CRLF)
             break ; /* end of header */
         if (match_pattern(current_line, HEADER_FIELD_PATTERN) == false)
-            return (http_message::reject_http_message()); /* 400 bad request (syntax error) */
+            return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
         std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
         std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
         message.header_fields[field_name] = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
@@ -254,7 +256,7 @@ http_message server::parse_request_header(int socket)
 * parses the message and return a request
 * don't know what makes most sense to handle header communication yet..
 */
-http_message server::parse_message(const http_message &message)
+http_request server::parse_message(const http_request &message)
 {
     return (message);
     // HandleHTTPRequest client_http_request(message);
@@ -264,7 +266,7 @@ http_message server::parse_message(const http_message &message)
 /*
 * responds to 'socket' based on set parameters
 */
-void server::router(int socket, const http_message& message)
+void server::router(int socket, const http_request& message)
 {
     /* construct response message
     *

@@ -3,13 +3,13 @@
 
 # include <string>
 # include <unordered_map>
-# include "http_message.hpp"
+# include "http_request.hpp"
 
 class HandleHTTPRequest
 {
 public:
     HandleHTTPRequest();
-    HandleHTTPRequest(const http_message &message);
+    HandleHTTPRequest(const http_request &message);
     HandleHTTPRequest(const HandleHTTPRequest& other);
     HandleHTTPRequest &operator=(const HandleHTTPRequest& other);
     ~HandleHTTPRequest();
@@ -17,7 +17,7 @@ public:
     int get_request_code(void);
 
 private:
-    http_message    request_message;
+    http_request    request_message;
     int             request_code;
 
     void handle_cache_control(void);
