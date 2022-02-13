@@ -32,6 +32,10 @@ HandleHTTPRequest::~HandleHTTPRequest()
 
 }
 
+/*
+* Handle request header fields here
+* RFC7231/5.1.
+*/
 int HandleHTTPRequest::get_request_code(void)
 {
     /* Controls
