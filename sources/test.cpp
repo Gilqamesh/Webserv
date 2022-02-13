@@ -18,6 +18,7 @@ int main(void)
     LOG(match_pattern("[hi", "\\[h\\."));
     LOG(match_pattern("[h.", "\\[h\\."));
     LOG(match_pattern("abc", "[a-d]"));
+    LOG(match_pattern("abc", "[a-d]"));
     LOG(match_pattern("abc", "[^a-d]"));
     LOG(match_pattern("abc", "[^d-e]*"));
     LOG(match_pattern("abc", "[^b]*.c"));
