@@ -2,7 +2,7 @@ name = webserv
 compile_flags = -Wall -Wextra -Werror -std=c++98
 link_flags =
 compiler = clang++
-server_files = server.cpp utils.cpp http_request.cpp
+server_files = main.cpp TcpListener.cpp WebServer.cpp
 header_directory = headers
 source_directory = sources
 object_directory = objects
