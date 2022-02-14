@@ -19,9 +19,7 @@ void server::initialize_constants(void)
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
 {
-    // PRINT_HERE();
     initialize_constants();
-    // PRINT_HERE();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
@@ -193,8 +191,8 @@ void server::cut_connection(int socket)
 
 /* handle the ready to read/write socket
 * 1. Parse request
-* 2. Format request
-* 4. Route request
+* 2. Format response
+* 3. Route to target
 */
 void server::handle_connection(int socket)
 {
@@ -250,9 +248,9 @@ http_request server::parse_request_header(int socket)
     message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
     message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
 
-    LOG("Method token: '" << message.method_token << "'");
-    LOG("Target: '" << message.target << "'");
-    LOG("Protocol version: '" << message.protocol_version << "'");
+    // LOG("Method token: '" << message.method_token << "'");
+    // LOG("Target: '" << message.target << "'");
+    // LOG("Protocol version: '" << message.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
