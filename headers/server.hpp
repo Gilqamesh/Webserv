@@ -21,11 +21,12 @@ private:
     int                                             server_port;
     int                                             server_backlog;
     fd_set                                          connected_sockets;
-    std::set<std::pair<int, unsigned long> >        connected_sockets_set; /* pairs are: socket, timestamp */
+    std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
     std::unordered_map<std::string, std::string>    cachedFiles; /* route - content */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
+    unsigned long                                   start_timestamp;
 public:
     server(int port, int backlog);
     ~server();
@@ -38,8 +39,8 @@ private:
     server &operator=(const server& other);
 
     void            accept_connection(void);
-    void            cut_connection(const std::pair<int, unsigned long>& socket);
-    void            handle_connection(const std::pair<int, unsigned long>& socket);
+    void            cut_connection(int socket);
+    void            handle_connection(int socket);
     http_request    parse_request_header(int socket);
     void            router(int socket, const http_request& request);
 

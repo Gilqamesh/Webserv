@@ -18,6 +18,7 @@
 
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
+# define LOG_TIME(x) (std::cout << x << " time: " << (get_current_timestamp() - start_timestamp) / 1000000.0 << " seconds" << std::endl)
 # define WARN(x) (LOG_E("Warning: " << x))
 # define TERMINATE(x) ({\
     perror(x);\

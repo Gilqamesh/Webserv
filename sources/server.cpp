@@ -32,6 +32,12 @@ server::server(int port, int backlog)
     if (server_socket_fd == -1)
         TERMINATE("failed to create a socket");
 
+    /* set socket opt
+    * SO_REUSEADDR allows us to reuse the specific port even if that port is busy
+    */
+    if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &server_socket_fd, sizeof(int)) == -1)
+        TERMINATE("setsockopt failed");
+
     /* binding/naming the socket
     * 1. fill out struct sockaddr_in
     *   sin_family    -   address family used for the socket
@@ -56,16 +62,15 @@ server::server(int port, int backlog)
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
-    connected_sockets_set.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
+    connected_sockets_map.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
     FD_ZERO(&connected_sockets);
     FD_SET(server_socket_fd, &connected_sockets);
 }
 
 server::~server()
 {
-    while (connected_sockets_set.size())
-        cut_connection(*connected_sockets_set.begin());
-    close(server_socket_fd);
+    while (connected_sockets_map.size())
+        cut_connection(connected_sockets_map.begin()->first);
 }
 
 /*
@@ -74,6 +79,8 @@ server::~server()
 */
 void server::server_listen(void)
 {
+    start_timestamp = get_current_timestamp();
+    struct timeval timeout = { TIMEOUT_TO_CUT_CONNECTION, 0 };
     while (true)
     {
         /* ready_sockets
@@ -81,26 +88,40 @@ void server::server_listen(void)
         * is needed because 'select' is destructive
         */
         fd_set ready_sockets = connected_sockets;
-        struct timeval timeout = { TIMEOUT_TO_CUT_CONNECTION, 0 };
         /* select()
         * monitors all file descriptors and waits until one of them is ready
         * first argument is the highest possible socket number + 1
         */
-        if (select((--connected_sockets_set.end())->first + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
+        if (select((--connected_sockets_map.end())->first + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
             TERMINATE("select failed");
         unsigned long current_timestamp = get_current_timestamp();
-        for (std::set<std::pair<int, unsigned long> >::const_iterator cit = connected_sockets_set.begin(); cit != connected_sockets_set.end(); ++cit)
+        unsigned long minimum_timestamp = current_timestamp; /* to update 'timeout' */
+        for (std::map<int, unsigned long>::iterator it = connected_sockets_map.begin(); it != connected_sockets_map.end();)
         {
-            if (FD_ISSET(cit->first, &ready_sockets))
+            std::map<int, unsigned long>::iterator tmp = it++; /* have to do this because iterator gets invalidated */
+            if (FD_ISSET(tmp->first, &ready_sockets))
             {
-                if (cit->first == server_socket_fd) { /* new connection */
+                if (tmp->first == server_socket_fd) { /* new connection */
                     accept_connection();
                 } else { /* connection is ready to write/read */
-                    handle_connection(*cit);
+                    tmp->second = get_current_timestamp(); /* update timestamp */
+                    handle_connection(tmp->first);
                 }
             }
-            else if (cit->first != server_socket_fd && cit->second + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp)
-                cut_connection(*cit);
+            else if (tmp->first != server_socket_fd)
+            {
+                if (tmp->second + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp)
+                    cut_connection(tmp->first);
+                else if (tmp->second < minimum_timestamp)
+                    minimum_timestamp = tmp->second;
+            }
+        }
+        timeout.tv_sec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) / 1000000;
+        timeout.tv_usec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000;
+        if (timeout.tv_sec >= 5)
+        {
+            timeout.tv_sec = 5;
+            timeout.tv_usec = 0;
         }
     }
 }
@@ -130,12 +151,12 @@ void server::cache_file(const std::string &path, const std::string &route)
 
 /*
 * accept and store the new connection from the server socket
+* adds current timestamp upon successful connection
 */
 void server::accept_connection(void)
 {
-    LOG("Current number of connections: " << connected_sockets_set.size());
     /* do not accept connection if the backlog is full */
-    if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog))
+    if (connected_sockets_map.size() >= static_cast<unsigned long>(server_backlog))
         return ;
     /* accept(socket, address, socket length) - grabs the first connection request on the queue
     * of pending connections and creates a new socket for that connection
@@ -148,21 +169,24 @@ void server::accept_connection(void)
     if (new_socket == -1)
         TERMINATE("accept failed");
     FD_SET(new_socket, &connected_sockets);
-    connected_sockets_set.insert(std::make_pair<int, unsigned long>(new_socket, get_current_timestamp()));
-    LOG("Client joined from socket: " << new_socket);
+    connected_sockets_map[new_socket] = get_current_timestamp();
+    LOG_TIME("Client joined from socket: " << new_socket);
 }
 
 /*
 * close and delete 'socket' from the connection list
 * TODO: send close response and close connection in stages RFC7230/6.6.
 */
-void server::cut_connection(const std::pair<int, unsigned long>& socket)
+void server::cut_connection(int socket)
 {
     /* close socket after we are done communicating */
-    close(socket.first);
-    FD_CLR(socket.first, &connected_sockets);
-    connected_sockets_set.erase(socket);
-    LOG("Client disconnected on socket: " << socket.first);
+    close(socket);
+    FD_CLR(socket, &connected_sockets);
+    connected_sockets_map.erase(socket);
+    if (socket == server_socket_fd)
+        LOG_TIME("Server disconnected on socket: " << socket);
+    else
+        LOG_TIME("Client disconnected on socket: " << socket);
 }
 
 /* handle the ready to read/write socket
@@ -170,11 +194,11 @@ void server::cut_connection(const std::pair<int, unsigned long>& socket)
 * 2. Format request
 * 3. Route request
 */
-void server::handle_connection(const std::pair<int, unsigned long>& socket)
+void server::handle_connection(int socket)
 {
-    http_request request_message = parse_request_header(socket.first);
+    http_request request_message = parse_request_header(socket);
     format_http_request(request_message);
-    router(socket.first, request_message);
+    router(socket, request_message);
     /* RFC7230/6.3. */
     if (request_message.header_fields["Connection"] == "close")
         cut_connection(socket);
@@ -219,9 +243,9 @@ http_request server::parse_request_header(int socket)
     message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
     message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
 
-    LOG("Method token: '" << message.method_token << "'");
-    LOG("Target: '" << message.target << "'");
-    LOG("Protocol version: '" << message.protocol_version << "'");
+    // LOG("Method token: '" << message.method_token << "'");
+    // LOG("Target: '" << message.target << "'");
+    // LOG("Protocol version: '" << message.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
