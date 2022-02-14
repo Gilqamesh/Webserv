@@ -24,3 +24,9 @@ Trello board for features/bugs: https://trello.com/b/uIzlqPtV/webserv
 I/O Multiplexing (select vs. poll vs. epoll/kqueue): https://nima101.github.io/io_multiplexing
 
 Header fields (can also be found in RFC7231): https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
+
+Beej’s Guide to Network Programming: https://beej.us/guide/bgnet/html/
+
+https://www.digitalocean.com/community/tutorials/understanding-nginx-server-and-location-block-selection-algorithms
+
+
