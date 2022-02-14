@@ -17,10 +17,9 @@ static int read_into_buffer(int fd, char **buffer)
     /* read into the buffer and null terminate it */
     int read_ret = read(fd, *buffer, BUFFER_SIZE);
     if (read_ret == -1) { /* read failed */
-        LOG_E("read failed in get_next_line");
         std::free(*buffer);
         *buffer = NULL;
-        exit(EXIT_FAILURE);
+        TERMINATE("read failed in get_next_line");
     }
     if (read_ret == 0) { /* immediate EOF */
         std::free(*buffer);

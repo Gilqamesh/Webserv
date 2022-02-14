@@ -98,7 +98,7 @@ void server::server_listen(void)
         unsigned long minimum_timestamp = current_timestamp; /* to update 'timeout' */
         for (std::map<int, unsigned long>::iterator it = connected_sockets_map.begin(); it != connected_sockets_map.end();)
         {
-            std::map<int, unsigned long>::iterator tmp = it++; /* have to do this because iterator gets invalidated */
+            std::map<int, unsigned long>::iterator tmp = it++; /* have to do this because iterator can get invalidated */
             if (FD_ISSET(tmp->first, &ready_sockets))
             {
                 if (tmp->first == server_socket_fd) { /* new connection */
@@ -118,9 +118,9 @@ void server::server_listen(void)
         }
         timeout.tv_sec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) / 1000000;
         timeout.tv_usec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000;
-        if (timeout.tv_sec >= 5)
+        if (timeout.tv_sec >= TIMEOUT_TO_CUT_CONNECTION)
         {
-            timeout.tv_sec = 5;
+            timeout.tv_sec = TIMEOUT_TO_CUT_CONNECTION;
             timeout.tv_usec = 0;
         }
     }
@@ -168,6 +168,8 @@ void server::accept_connection(void)
     int new_socket = accept(server_socket_fd, reinterpret_cast<struct sockaddr *>(&address), &address_length);
     if (new_socket == -1)
         TERMINATE("accept failed");
+    if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
+        TERMINATE("fcntl failed");
     FD_SET(new_socket, &connected_sockets);
     connected_sockets_map[new_socket] = get_current_timestamp();
     LOG_TIME("Client joined from socket: " << new_socket);
@@ -192,11 +194,16 @@ void server::cut_connection(int socket)
 /* handle the ready to read/write socket
 * 1. Parse request
 * 2. Format request
-* 3. Route request
+* 4. Route request
 */
 void server::handle_connection(int socket)
 {
     http_request request_message = parse_request_header(socket);
+    if (request_message.reject == true) { /* http_request does not need to be further analyzed, just return a 400 response */
+        /* 400 bad request (syntax error) */
+        router(socket, request_message);
+        return ;
+    }
     format_http_request(request_message);
     router(socket, request_message);
     /* RFC7230/6.3. */
@@ -243,9 +250,9 @@ http_request server::parse_request_header(int socket)
     message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
     message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
 
-    // LOG("Method token: '" << message.method_token << "'");
-    // LOG("Target: '" << message.target << "'");
-    // LOG("Protocol version: '" << message.protocol_version << "'");
+    LOG("Method token: '" << message.method_token << "'");
+    LOG("Target: '" << message.target << "'");
+    LOG("Protocol version: '" << message.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
@@ -339,11 +346,18 @@ void server::handle_TE(void)
 
 /*
 * responds to 'socket' based on set parameters
+* NEED: constructing http response
 */
 void server::router(int socket, const http_request& message)
 {
+    if (message.reject == true)
+    {
+        /* respond with 400 */
+        std::string response = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: ";
+        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
+        write(socket, response.c_str(), response.length());    
+    }
     /* construct response message
-    *
     * first line is the Status Line (rfc7230/3.1.2.)
     */
     std::string response = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: ";
