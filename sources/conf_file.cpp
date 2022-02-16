@@ -3,6 +3,8 @@
 conf_file::conf_file(char *file_name)
 {
 	get_input(file_name);
+	update_server_buffer();
+	update_location_buffer();
 	parse_server();
 }
 
@@ -80,9 +82,17 @@ void					conf_file::parse_location(int idx, int start)
 			error("invalid line");
 		words[1].pop_back();
 		if (words.front() == "root")
+		{
+			if (!_location_buf.root.empty())
+				error("root aleady exist");
 			_location_buf.root = words[1];
+		}
 		else if (words.front() == "index")
+		{
+			if (!_location_buf.index.empty())
+				error("index already exist");
 			_location_buf.index = words[1];
+		}
 		else
 			error("worong location config name");
 		start++;
@@ -121,9 +131,17 @@ t_config					conf_file::get_server_config(std::string &line)
 		error("invalid line");
 	words[1].pop_back();
 	if (words.front() == "listen")
+	{
+		if (!is_number(words[1]) || _server_buf.port != -1)
+			error("incorrect port");
 		_server_buf.port = std::stoi(words[1]);
+	}
 	else if (words.front() == "server_name")
+	{
+		if (!_server_buf.server_name.empty())
+			error("server_name already exist");
 		_server_buf.server_name = words[1];
+	}
 	else
 		error("wrong config name");
 	return (NONE);
@@ -188,6 +206,14 @@ const std::string			conf_file::get_line_without_spaces(std::string &line) const
 			res.push_back(line[i]);
 
 	return (res);
+}
+
+bool						conf_file::is_number(std::string& port) const
+{
+	for (size_t i = 0; i < port.size(); i++)
+		if (!isdigit(port[i]))
+			return (0);
+	return (1);
 }
 
 bool						conf_file::header_is_valid(std::string &front, std::string &back) const

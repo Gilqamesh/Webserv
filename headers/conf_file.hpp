@@ -44,6 +44,7 @@ class conf_file
 		void						get_input(char *file_name);
 		void						parse_location(int idx, int start);
 		void						error(std::string message) const;
+		bool						is_number(std::string& port) const;
 		bool						line_is_empty(std::string& line) const;
 		bool						line_is_comment(std::string& line) const;
 		bool						header_is_valid(std::string& front, std::string& back) const;
