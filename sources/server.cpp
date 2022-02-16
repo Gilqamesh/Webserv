@@ -57,6 +57,7 @@ server::server(int port, int backlog)
     *   the backlog defines the maximum number of pending connections that can be queued up
     *   before connections are refused
     */
+
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
