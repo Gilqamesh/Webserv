@@ -9,7 +9,7 @@
 # define OPEN_MAX 1000
 #endif
 #ifndef BUFFER_SIZE
-# define BUFFER_SIZE 10000
+# define BUFFER_SIZE 1
 #endif
 
 static int read_into_buffer(int fd, char **buffer)

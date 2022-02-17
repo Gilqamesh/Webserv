@@ -19,7 +19,9 @@ void server::initialize_constants(void)
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
 {
+    // PRINT_HERE();
     initialize_constants();
+    // PRINT_HERE();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
@@ -62,10 +64,8 @@ server::server(int port, int backlog)
     LOG("Server listens on port: " << server_port);
     connected_sockets_map.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
 
-    // the kqueue holds all the events we are interested in
-    // to start, we simply create an empty kqueue
-    if ((this->kq = kqueue()) == -1)
-        TERMINATE("failed to create empty kqueue");
+    FD_ZERO(&connected_sockets);
+    FD_SET(server_socket_fd, &connected_sockets);
 }
 
 server::~server()
@@ -80,49 +80,51 @@ server::~server()
 */
 void server::server_listen(void)
 {
-    // EV_SET() -> initialize a kevent structure.
-    EV_SET(&evSet, server_socket_fd, EVFILT_READ, EV_ADD, 0, 5000, NULL);
-
-    struct timespec timeout = {TIMEOUT_TO_CUT_CONNECTION, 0};
+   
     start_timestamp = get_current_timestamp();
-
-    // Register the empty kqueue (kq) to evSet;
-    if (kevent(kq, &evSet, 1, NULL, 0, &timeout) == -1)
-        TERMINATE("Registration failed");
-
+    struct timeval timeout = { TIMEOUT_TO_CUT_CONNECTION, 0 };
     while (true)
     {
-        // call kevent(..) to receive incoming events and process them
-		// waiting/reading events (up to N (N = MAX_EVENTS) at a time)
-        // returns number of events
-        int nev = kevent(kq, NULL, 0, evList, MAX_EVENTS, NULL);
-
+        /* ready_sockets
+        * a copy of connected_sockets each iteration,
+        * is needed because 'select' is destructive
+        */
+        fd_set ready_sockets = connected_sockets;
+        /* select()
+        * monitors all file descriptors and waits until one of them is ready
+        * first argument is the highest possible socket number + 1
+        */
+        if (select((--connected_sockets_map.end())->first + 1, &ready_sockets, NULL, NULL, &timeout) == -1)
+            TERMINATE("select failed");
         unsigned long current_timestamp = get_current_timestamp();
         unsigned long minimum_timestamp = current_timestamp; /* to update 'timeout' */
-        for (int i = 0; i < nev; ++i)
+        for (std::map<int, unsigned long>::iterator it = connected_sockets_map.begin(); it != connected_sockets_map.end();)
         {
-            int fd = static_cast<int>(evList[i].ident);
-
-            if (fd == server_socket_fd) // receive new connection
-                accept_connection(fd);
-            else if (evList[i].filter == EVFILT_READ)
+            std::map<int, unsigned long>::iterator tmp = it++; /* have to do this because iterator can get invalidated */
+            if (FD_ISSET(tmp->first, &ready_sockets))
             {
-                connected_sockets_map[fd] = get_current_timestamp();
-                handle_connection(fd);
+                if (tmp->first == server_socket_fd) { /* new connection */
+                    accept_connection();
+                } else { /* connection is ready to write/read */
+                    tmp->second = get_current_timestamp(); /* update timestamp */
+                    handle_connection(tmp->first);
+                }
             }
-            else if (evList[i].flags & EV_EOF) // client disconnected
-                cut_connection(fd);
-            else if (connected_sockets_map[fd] + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp )
-                cut_connection(fd);
-            else if (connected_sockets_map[fd] < minimum_timestamp)
-                    minimum_timestamp = connected_sockets_map[fd];
+            else if (tmp->first != server_socket_fd)
+            {
+                if (tmp->second + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp)
+                    cut_connection(tmp->first);
+                else if (tmp->second < minimum_timestamp)
+                    minimum_timestamp = tmp->second;
+            }
         }
+
         timeout.tv_sec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) / 1000000;
-        timeout.tv_nsec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000000;
+        timeout.tv_usec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000000;
         if (timeout.tv_sec >= TIMEOUT_TO_CUT_CONNECTION)
         {
             timeout.tv_sec = TIMEOUT_TO_CUT_CONNECTION;
-            timeout.tv_nsec = 0;
+            timeout.tv_usec = 0;
         }
     }
 }
@@ -154,26 +156,24 @@ void server::cache_file(const std::string &path, const std::string &route)
 * accept and store the new connection from the server socket
 * adds current timestamp upon successful connection
 */
-void server::accept_connection(int socket)
+void server::accept_connection(void)
 {
     /* do not accept connection if the backlog is full */
     if (connected_sockets_map.size() >= static_cast<unsigned long>(server_backlog))
         return ;
-    struct sockaddr_storage addr;
-    socklen_t socklen = sizeof(addr);
-    int new_socket = accept(socket, (struct sockaddr *)&addr, &socklen);
+    /* accept(socket, address, socket length) - grabs the first connection request on the queue
+    * of pending connections and creates a new socket for that connection
+    * The original socket that is set up for listening is used only for accepting connections,
+    * not for exchanging data.
+    */
+    struct sockaddr_in address;
+    socklen_t address_length;
+    int new_socket = accept(server_socket_fd, reinterpret_cast<struct sockaddr *>(&address), &address_length);
     if (new_socket == -1)
         TERMINATE("accept failed");
-
-     // Listen on the new socket
-    EV_SET(&evSet, new_socket, EVFILT_READ, EV_ADD, 0, 0, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("fcntl failed");
-
-     // schedule to send the file when we can write (first chunk should happen immediately)
-    EV_SET(&evSet, new_socket, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
+    FD_SET(new_socket, &connected_sockets);
     connected_sockets_map[new_socket] = get_current_timestamp();
     LOG_TIME("Client joined from socket: " << new_socket);
 }
@@ -186,7 +186,7 @@ void server::cut_connection(int socket)
 {
     /* close socket after we are done communicating */
     close(socket);
-    // Socket is automatically removed from the kq by the kernel.
+    FD_CLR(socket, &connected_sockets);
     connected_sockets_map.erase(socket);
     if (socket == server_socket_fd)
         LOG_TIME("Server disconnected on socket: " << socket);
@@ -196,8 +196,8 @@ void server::cut_connection(int socket)
 
 /* handle the ready to read/write socket
 * 1. Parse request
-* 2. Format response
-* 3. Route to target
+* 2. Format request
+* 4. Route request
 */
 void server::handle_connection(int socket)
 {
@@ -253,9 +253,9 @@ http_request server::parse_request_header(int socket)
     message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
     message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
 
-    // LOG("Method token: '" << message.method_token << "'");
-    // LOG("Target: '" << message.target << "'");
-    // LOG("Protocol version: '" << message.protocol_version << "'");
+    LOG("Method token: '" << message.method_token << "'");
+    LOG("Target: '" << message.target << "'");
+    LOG("Protocol version: '" << message.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
