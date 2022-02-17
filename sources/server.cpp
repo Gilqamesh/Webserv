@@ -118,7 +118,7 @@ void server::server_listen(void)
                     minimum_timestamp = connected_sockets_map[fd];
         }
         timeout.tv_sec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) / 1000000;
-        timeout.tv_nsec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000000;
+        timeout.tv_nsec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000;
         if (timeout.tv_sec >= TIMEOUT_TO_CUT_CONNECTION)
         {
             timeout.tv_sec = TIMEOUT_TO_CUT_CONNECTION;
@@ -180,7 +180,11 @@ void server::accept_connection(int socket)
 
 /*
 * close and delete 'socket' from the connection list
-* TODO: send close response and close connection in stages RFC7230/6.6.
+* To avoid TCP reset problem (RFC7230/6.6) the connection is closed in stages
+*   first, half-close by closing only the write side of the read/write connection
+*   then continue to read from the connection until receiving a corresponding close by the client
+*       or until we are reasonably certain that the client has received the server's last response
+*   lastly, fully close the connection
 */
 void server::cut_connection(int socket)
 {
@@ -197,20 +201,16 @@ void server::cut_connection(int socket)
 /* handle the ready to read/write socket
 * 1. Parse request
 * 2. Format response
-* 3. Route to target
+* 3. Send response in 'router'
+* 4. After responding close connection if needed
 */
 void server::handle_connection(int socket)
 {
     http_request request_message = parse_request_header(socket);
-    if (request_message.reject == true) { /* http_request does not need to be further analyzed, just return a 400 response */
-        /* 400 bad request (syntax error) */
-        router(socket, request_message);
-        return ;
-    }
     format_http_request(request_message);
     router(socket, request_message);
     /* RFC7230/6.3. */
-    if (request_message.header_fields["Connection"] == "close")
+    if (request_message.reject == true || request_message.header_fields["Connection"] == "close")
         cut_connection(socket);
     else if (request_message.protocol_version >= "HTTP/1.1")
         /* persistent connection */;
@@ -226,7 +226,7 @@ void server::handle_connection(int socket)
             cut_connection(socket);
     }
     else
-        assert(false); /* protocol version is not properly parsed */
+        assert(false); /* protocol version is not properly parsed or a case is not handled */
 }
 
 /* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
@@ -297,6 +297,8 @@ http_request server::parse_request_header(int socket)
 */
 void server::format_http_request(http_request& request)
 {
+    if (request.reject == true) /* if 'request' is rejected, no need to further analyse */
+        return ;
     /* Controls
     * controls are request header fields (key-value pairs) that direct
     * specific handling of the request
