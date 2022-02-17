@@ -1,5 +1,6 @@
 #include "server.hpp"
 #include "utils.hpp"
+#include <signal.h>
 #include <cstdio>
 
 /*
@@ -62,7 +63,8 @@ server::server(int port, int backlog)
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
-    connected_sockets_map.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
+    // connected_sockets_map.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
+    connected_sockets_set.insert(server_socket_fd);
 
     // the kqueue holds all the events we are interested in
     // to start, we simply create an empty kqueue
@@ -82,49 +84,42 @@ server::~server()
 */
 void server::server_listen(void)
 {
-    // EV_SET() -> initialize a kevent structure.
-    EV_SET(&evSet, server_socket_fd, EVFILT_READ, EV_ADD, 0, 5000, NULL);
-
-    struct timespec timeout = {TIMEOUT_TO_CUT_CONNECTION, 0};
     start_timestamp = get_current_timestamp();
 
-    // Register the empty kqueue (kq) to evSet;
-    if (kevent(kq, &evSet, 1, NULL, 0, &timeout) == -1)
+    // EV_SET() -> initialize a kevent structure, here our listening server
+    EV_SET(&evSet, server_socket_fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+
+    // ...and register it to the kqueue;
+    if (kevent(kq, &evSet, 1, NULL, 0, 0) == -1)
         TERMINATE("Registration failed");
 
     while (true)
     {
         // call kevent(..) to receive incoming events and process them
-		// waiting/reading events (up to N (N = MAX_EVENTS) at a time)
+        // waiting/reading events (up to N (N = MAX_EVENTS) at a time)
         // returns number of events
         int nev = kevent(kq, NULL, 0, evList, MAX_EVENTS, NULL);
 
-        unsigned long current_timestamp = get_current_timestamp();
-        unsigned long minimum_timestamp = current_timestamp; /* to update 'timeout' */
         for (int i = 0; i < nev; ++i)
         {
             int fd = static_cast<int>(evList[i].ident);
-
-            if (fd == server_socket_fd) // receive new connection
+            if (fd == server_socket_fd)                 // receive new connection
                 accept_connection(fd);
             else if (evList[i].filter == EVFILT_READ)
-            {
-                connected_sockets_map[fd] = get_current_timestamp();
-                handle_connection(fd);
+			{
+                if (evList[i].flags & EV_EOF)          // client disconnected
+                    cut_connection(fd);
+                else
+                    handle_connection(fd);
             }
-            else if (evList[i].flags & EV_EOF) // client disconnected
+            else if (evList[i].filter == EVFILT_WRITE)
+            {
+                // TODO -> handle EVFILT_WRITE
+            }
+            else if (evList[i].filter == EVFILT_TIMER)  // check for timeout
                 cut_connection(fd);
-            else if (connected_sockets_map[fd] + TIMEOUT_TO_CUT_CONNECTION * 1000000 < current_timestamp )
+            else if (evList[i].flags & EV_EOF)          // client disconnected
                 cut_connection(fd);
-            else if (connected_sockets_map[fd] < minimum_timestamp)
-                    minimum_timestamp = connected_sockets_map[fd];
-        }
-        timeout.tv_sec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) / 1000000;
-        timeout.tv_nsec = (minimum_timestamp - current_timestamp + TIMEOUT_TO_CUT_CONNECTION * 1000000) % 1000000000;
-        if (timeout.tv_sec >= TIMEOUT_TO_CUT_CONNECTION)
-        {
-            timeout.tv_sec = TIMEOUT_TO_CUT_CONNECTION;
-            timeout.tv_nsec = 0;
         }
     }
 }
@@ -159,7 +154,7 @@ void server::cache_file(const std::string &path, const std::string &route)
 void server::accept_connection(int socket)
 {
     /* do not accept connection if the backlog is full */
-    if (connected_sockets_map.size() >= static_cast<unsigned long>(server_backlog))
+    if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog))
         return ;
     struct sockaddr_storage addr;
     socklen_t socklen = sizeof(addr);
@@ -167,16 +162,23 @@ void server::accept_connection(int socket)
     if (new_socket == -1)
         TERMINATE("accept failed");
 
-     // Listen on the new socket
-    EV_SET(&evSet, new_socket, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    // Adding events we are interested in:
+
+    // register listening handler
+    EV_SET(&evSet, new_socket, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
     kevent(kq, &evSet, 1, NULL, 0, NULL);
+
+    // register writing handler
+    EV_SET(&evSet, new_socket, EVFILT_WRITE, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, NULL);
+    kevent(kq, &evSet, 1, NULL, 0, NULL);
+
+	// register timeout handler
+    EV_SET(&evSet, new_socket, EVFILT_TIMER, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 5000, NULL);
+    kevent(kq, &evSet, 1, NULL, 0, NULL);
+
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("fcntl failed");
-
-     // schedule to send the file when we can write (first chunk should happen immediately)
-    EV_SET(&evSet, new_socket, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
-    connected_sockets_map[new_socket] = get_current_timestamp();
+	connected_sockets_set.insert(new_socket);
     LOG_TIME("Client joined from socket: " << new_socket);
 }
 
@@ -189,7 +191,7 @@ void server::cut_connection(int socket)
     /* close socket after we are done communicating */
     close(socket);
     // Socket is automatically removed from the kq by the kernel.
-    connected_sockets_map.erase(socket);
+    connected_sockets_set.erase(socket);
     if (socket == server_socket_fd)
         LOG_TIME("Server disconnected on socket: " << socket);
     else
