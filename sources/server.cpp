@@ -71,8 +71,8 @@ server::server(int port, int backlog)
 
 server::~server()
 {
-    while (connected_sockets_map.size())
-        cut_connection(connected_sockets_map.begin()->first);
+    while (connected_sockets_set.size())
+        cut_connection(*(connected_sockets_set.begin()));
 }
 
 /*
@@ -103,18 +103,17 @@ void server::server_listen(void)
             if (fd == server_socket_fd)                 // receive new connection
                 accept_connection(fd);
             else if (evList[i].filter == EVFILT_READ)
-            {
-                if (evList[i].flags & EV_EOF)          // client disconnected
-                    cut_connection(fd);
-                else
-                    handle_connection(fd);
-            }
-            else if (evList[i].filter == EVFILT_WRITE)
-            {
-                // TODO -> handle EVFILT_WRITE
-            }
+            	handle_connection(fd);
+            // else if (evList[i].filter == EVFILT_WRITE)
+            // {
+            //     // TODO -> handle EVFILT_WRITE
+            // }
             else if (evList[i].filter == EVFILT_TIMER)  // check for timeout
-                cut_connection(fd);
+            {
+                std::set<int>::iterator it = connected_sockets_set.find(fd);
+                if (it != connected_sockets_set.end())
+                    cut_connection(fd);
+            }
             else if (evList[i].flags & EV_EOF)          // client disconnected
                 cut_connection(fd);
         }
