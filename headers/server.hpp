@@ -31,7 +31,7 @@ private:
     struct kevent                                   evList[MAX_EVENTS];
     fd_set                                          connected_sockets;
     std::set<int>                                   connected_sockets_set; /* socket */
-    std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
+    // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
     std::unordered_map<std::string, std::string>    cachedFiles; /* route - content */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
