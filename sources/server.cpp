@@ -83,7 +83,7 @@ void server::server_listen(void)
     // EV_SET() -> initialize a kevent structure.
     EV_SET(&evSet, server_socket_fd, EVFILT_READ, EV_ADD, 0, 5000, NULL);
 
-    struct timespec timeout = {TIMEOUT_TO_CUT_CONNECTION, 0};
+    struct timespec timeout = { TIMEOUT_TO_CUT_CONNECTION, 0 };
     start_timestamp = get_current_timestamp();
 
     // Register the empty kqueue (kq) to evSet;
@@ -129,10 +129,13 @@ void server::server_listen(void)
 
 /*
 * load a file from 'path' to match a specific 'route'
+* NEED: content-type for resource
+* NEED: allowed_methods coming from config file
+* OPTIONAL: content-encoding, content_language, content-location
 */
 void server::cache_file(const std::string &path, const std::string &route)
 {
-    if (cachedFiles.count(route))
+    if (cached_resources.count(route))
     {
         WARN("route: '" << route << "' already exists");
         return ;
@@ -147,7 +150,17 @@ void server::cache_file(const std::string &path, const std::string &route)
     std::string content;
     while (getline(ifs, tmp))
         content += tmp;
-    cachedFiles[route] = content;
+    resource res;
+    res.target = path;
+    res.content = content;
+    /* for now hard-coded, but this needs to be whatever the file's type is */
+    res.content_type = "text/html";
+    // /* for now hard-coded, but it needs to be the file path relative */
+    // res.content_location = path + ".html";
+    /* for now hard-coded */
+    res.allowed_methods.insert("GET");
+    res.allowed_methods.insert("HEAD");
+    cached_resources[route] = res;
 }
 
 /*
@@ -286,13 +299,13 @@ void server::format_http_request(http_request& request)
     * controls are request header fields (key-value pairs) that direct
     * specific handling of the request
     */
-    handle_cache_control();
-    handle_expect();
-    handle_host();
-    handle_max_forwards();
-    handle_pragma();
-    handle_range();
-    handle_TE();
+    request_control_cache_control(request);
+    request_control_expect(request);
+    request_control_host(request);
+    request_control_max_forwards(request);
+    request_control_pragma(request);
+    request_control_range(request);
+    request_control_TE(request);
 
     /* RFC7230/6.3. */
     if (request.reject == true) /* if 'request' is rejected, no need to further analyse */
@@ -316,66 +329,225 @@ void server::format_http_request(http_request& request)
         assert(false); /* protocol version is not properly parsed or a case is not handled */
 }
 
-/* CONTROLS */
+/* REQUEST CONTROLS */
 
-void server::handle_cache_control(void)
+void            server::request_control_cache_control(http_request &request)
 {
-
+    (void)request;
 }
 
-void server::handle_expect(void)
+void            server::request_control_expect(http_request &request)
 {
-
+    (void)request;
 }
 
-void server::handle_host(void)
+void            server::request_control_host(http_request &request)
 {
+    (void)request;
 }
 
-void server::handle_max_forwards(void)
+void            server::request_control_max_forwards(http_request &request)
 {
-
+    (void)request;
 }
 
-void server::handle_pragma(void)
+void            server::request_control_pragma(http_request &request)
 {
-
+    (void)request;
 }
 
-void server::handle_range(void)
+void            server::request_control_range(http_request &request)
 {
-
+    (void)request;
 }
 
-void server::handle_TE(void)
+void            server::request_control_TE(http_request &request)
 {
-
+    (void)request;
 }
 
-/*
-* responds to 'socket' based on set parameters
-* NEED: constructing http response
+
+/* Constructs http_response
+* 1. Construct Status Line
+*   1.1. HTTP-version
+*   1.2. Status Code
+*   1.3. Reason Phrase
+* 2. Construct Header Fields using Control Data RFC7231/7.1.
+* 3. Construct Message Body
 */
-void server::router(int socket, const http_request& message)
+http_response server::format_http_response(const http_request& request)
 {
-    if (message.reject == true)
-    {
-        /* respond with 400 */
-        std::string response = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: ";
-        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
-        write(socket, response.c_str(), response.length());    
+    http_response response;
+    response.http_version = "HTTP/1.1";
+    if (request.reject == true) { /* Bad Request */
+        response.status_code = "400";
+        response.reason_phrase = "Bad Request";
+    } else if (cached_resources.count(request.target) == 0) { /* Not Found */
+        response.status_code = "404";
+        response.reason_phrase = "Not Found";
+    } else if (accepted_request_methods.count(request.method_token) == 0) { /* Not Implemented */
+        response.status_code = "501";
+        response.reason_phrase = "Not Implemented";
+    } else if (cached_resources[request.target].allowed_methods.count(request.method_token) == 0) { /* Not Allowed */
+        response.status_code = "405";
+        response.reason_phrase = "Method Not Allowed";
+        /* RFC7231/6.5.5. must generate Allow header field */
+        for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].allowed_methods.begin(); cit != cached_resources[request.target].allowed_methods.end(); ++cit)
+            response.header_fields["Allow"] += response.header_fields.count("Allow") ? "," + *cit : *cit;
+    } else if (request.method_token == "POST") { /* Target resource needs to process the request */
+        /* RFC7231/4.3.3.
+        * CGI for example comes here
+        * if one or more resources has been created, status code needs to be 201 with "Created"
+        *   with "Location" header field that provides an identifier for the primary resource created
+        *   and a representation that describes the status of the request while referring to the new resource(s).
+        * If no resources are created, respond with 200 that containts the result and a "Content-Location"
+        *   header field that has the same value as the POST's effective request URI
+        * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
+        */
+    } else { /* 200 */
+        response.status_code = "200";
+        response.reason_phrase = "OK";
     }
-    /* construct response message
-    * first line is the Status Line (rfc7230/3.1.2.)
-    */
-    std::string response = "HTTP/1.1 200 OK\nContent-Type:text/html\nContent-Length: ";
-    if (message.target == "/")
-        response += std::to_string(cachedFiles["/"].length()) + "\n\n" + cachedFiles["/"];
-    else if (message.target == "/about")
-        response += std::to_string(cachedFiles["/about"].length()) + "\n\n" + cachedFiles["/about"];
-    else if (message.target == "/error" || message.reject == true)
-        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
+
+    if (match_pattern(response.status_code, "2..") == true)
+    {
+        /* Control Data RFC7231/7.1. */
+        response_control_handle_age(response);
+        response_control_cache_control(response);
+        response_control_expires(response);
+        response_control_date(response);
+        response_control_location(response);
+        response_control_retry_after(response);
+        response_control_vary(response);
+        response_control_warning(response);
+
+        representation_metadata(request, response);
+    }
+
+    payload_header_fields(request, response);
+
+    /* add payload */
+    if (match_pattern(response.status_code, "2..") == true)
+    {
+        if (response.header_fields.count("Content-Length"))
+            response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
+        else
+            response.payload = cached_resources[request.target].content;
+    }
     else
-        response += std::to_string(cachedFiles["/error"].length()) + "\n\n" + cachedFiles["/error"];
-    write(socket, response.c_str(), response.length());
+        response.payload = cached_resources["/error"].content;
+
+    return (response);
+}
+
+/* RESPONSE CONTROLS */
+
+void            server::response_control_handle_age(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_cache_control(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_expires(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_date(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_location(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_retry_after(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_vary(http_response &response)
+{
+    (void)response;
+}
+
+void            server::response_control_warning(http_response &response)
+{
+    (void)response;
+}
+
+/* Header fields for payload RFC7231/3.1.
+* sets header fields to provide metadata about the representation
+*/
+void server::representation_metadata(const http_request &request, http_response &response)
+{
+    response.header_fields["Content-Type"] = cached_resources[request.target].content_type;
+    for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
+        response.header_fields["Content-Encoding"] += response.header_fields.count("Content-Encoding") ? "," + *cit : *cit;
+    for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_language.begin(); cit != cached_resources[request.target].content_language.end(); ++cit)
+        response.header_fields["Content-Language"] += response.header_fields.count("Content-Language") ? "," + *cit : *cit;
+    // response.header_fields["Content-Location"] = cached_resources[request.target].content_location;
+}
+
+void server::representation_metadata(http_request &request)
+{
+    (void)request;
+}
+
+/* Payload Semantics RFC7231/3.3.
+* 1. Content-Length
+*   'Transfer-Encoding' header field must be known at this point
+* 2. Content-Range: NOT IMPLEMENTED
+* 3. Trailer: NOT IMPLEMENTED
+*/
+void server::payload_header_fields(const http_request &request, http_response &response)
+{
+    if (match_pattern(response.status_code, "4..") == true)
+    {
+        response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+        return ;
+    }
+    if (response.header_fields.count("Transfer-Encoding") == 0) /* set up Content-Length */
+    {
+        if (response.status_code == "204" || match_pattern(response.status_code, "1..") == true)
+            /* No Content-Length header field */;
+        else
+            response.header_fields["Content-Length"] = std::to_string(cached_resources[request.target].content.length());
+    }
+    if (response.status_code == "204" || match_pattern(response.status_code, "1..") == true
+        || (request.method_token == "CONNECT" && match_pattern(response.status_code, "2..") == true))
+        /* No Transfer-Encoding header field */;
+    else
+        for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
+            response.header_fields["Transfer-Encoding"] += response.header_fields.count("Transfer-Encoding") ? "," + *cit : *cit;
+}
+
+/* responds to 'socket' based on set parameters
+* 1. Construct http response
+* 2. Send response
+* Warning: The message might not fit into the 'send' buffer which is not handled
+*/
+void server::router(int socket, const http_request &request)
+{
+    http_response response = format_http_response(request);
+
+    // LOG("Request target: " << request.target);
+    // LOG("Status-line: " << response.http_version << " " << response.status_code << " " << response.reason_phrase);
+    // LOG("Header fields");
+    // for (std::unordered_map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
+    //     LOG(cit->first << ": " << cit->second);
+    // LOG("Payload: " << response.payload);
+
+    std::string message = response.http_version + " " + response.status_code + " " + response.reason_phrase + "\n";
+    for (std::unordered_map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
+        message += cit->first + ":" + cit->second + "\n";
+    message += "\n";
+    message += response.payload;
+    send(socket, message.c_str(), message.length(), 0);
 }

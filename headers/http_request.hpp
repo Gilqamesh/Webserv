@@ -14,9 +14,11 @@ struct http_request
 
     static http_request reject_http_request(void);
 
+    /* Request Line RFC7230/3.1.1. */
     std::string                                     method_token;
     std::string                                     target;
     std::string                                     protocol_version;
+
     std::unordered_map<std::string, std::string>    header_fields;
     std::string                                     payload; /* message body RFC7230/3.3.*/
     bool                                            reject;

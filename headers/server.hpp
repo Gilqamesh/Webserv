@@ -8,6 +8,8 @@
 # include <unordered_map>
 # include <vector>
 # include "http_request.hpp"
+# include "http_response.hpp"
+# include "resource.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -31,7 +33,7 @@ private:
     struct kevent                                   evList[MAX_EVENTS];
     fd_set                                          connected_sockets;
     std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
-    std::unordered_map<std::string, std::string>    cachedFiles; /* route - content */
+    std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
@@ -55,13 +57,28 @@ private:
 
     /* format http request and its control functions */
     void            format_http_request(http_request& request);
-    void            handle_cache_control(void);
-    void            handle_expect(void);
-    void            handle_host(void);
-    void            handle_max_forwards(void);
-    void            handle_pragma(void);
-    void            handle_range(void);
-    void            handle_TE(void);
+    void            request_control_cache_control(http_request &request);
+    void            request_control_expect(http_request &request);
+    void            request_control_host(http_request &request);
+    void            request_control_max_forwards(http_request &request);
+    void            request_control_pragma(http_request &request);
+    void            request_control_range(http_request &request);
+    void            request_control_TE(http_request &request);
+
+    /* format http response and its control functions */
+    http_response   format_http_response(const http_request& request);
+    void            response_control_handle_age(http_response &response);
+    void            response_control_cache_control(http_response &response);
+    void            response_control_expires(http_response &response);
+    void            response_control_date(http_response &response);
+    void            response_control_location(http_response &response);
+    void            response_control_retry_after(http_response &response);
+    void            response_control_vary(http_response &response);
+    void            response_control_warning(http_response &response);
+
+    void            representation_metadata(const http_request &request, http_response &response); /* Header field config for payload RFC7231/3.1. */
+    void            representation_metadata(http_request &request); /* should be the same as for response */
+    void            payload_header_fields(const http_request &request, http_response &response);
 
     void            initialize_constants(void); // helper
 };
