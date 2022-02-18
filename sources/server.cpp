@@ -169,7 +169,7 @@ void server::accept_connection(int socket)
     kevent(kq, &evSet, 1, NULL, 0, NULL);
 
 	// register timeout handler
-    EV_SET(&evSet, new_socket, EVFILT_TIMER , EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 5000, NULL);
+    EV_SET(&evSet, new_socket, EVFILT_TIMER, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 5000, NULL);
     kevent(kq, &evSet, 1, NULL, 0, NULL);
 
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
