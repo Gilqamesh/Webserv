@@ -17,9 +17,13 @@ static int read_into_buffer(int fd, char **buffer)
     /* read into the buffer and null terminate it */
     int read_ret = read(fd, *buffer, BUFFER_SIZE);
     if (read_ret == -1) { /* read failed */
-        std::free(*buffer);
-        *buffer = NULL;
-        TERMINATE("read failed in get_next_line");
+        // std::free(*buffer);
+        // *buffer = NULL;
+        /* NO TERMINATE
+        * because we have non-blocking sockets, we can get error from read EWOULDBLOCK,
+        * in which case the rest of the buffer might need to be handled differently
+        */
+       return (1);
     }
     if (read_ret == 0) { /* immediate EOF */
         std::free(*buffer);

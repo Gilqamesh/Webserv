@@ -19,9 +19,7 @@ void server::initialize_constants(void)
 server::server(int port, int backlog)
     : server_socket_fd(-1), server_port(port), server_backlog(backlog)
 {
-    // PRINT_HERE();
     initialize_constants();
-    // PRINT_HERE();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
     * AF_INET       -   IP address family
@@ -183,7 +181,12 @@ void server::accept_connection(int socket)
 
 /*
 * close and delete 'socket' from the connection list
-* TODO: send close response and close connection in stages RFC7230/6.6.
+// for the below problem the shutdown() function would be a solution but it's not allowed
+// * To avoid TCP reset problem (RFC7230/6.6) the connection is closed in stages
+// *   first, half-close by closing only the write side of the read/write connection
+// *   then continue to read from the connection until receiving a corresponding close by the client
+// *       or until we are reasonably certain that the client has received the server's last response
+// *   lastly, fully close the connection
 */
 void server::cut_connection(int socket)
 {
@@ -199,37 +202,17 @@ void server::cut_connection(int socket)
 
 /* handle the ready to read/write socket
 * 1. Parse request
-* 2. Format request
-* 4. Route request
+* 2. Format response
+* 3. Send response in 'router'
+* 4. After responding close connection if needed
 */
 void server::handle_connection(int socket)
 {
     http_request request_message = parse_request_header(socket);
-    if (request_message.reject == true) { /* http_request does not need to be further analyzed, just return a 400 response */
-        /* 400 bad request (syntax error) */
-        router(socket, request_message);
-        return ;
-    }
     format_http_request(request_message);
     router(socket, request_message);
-    /* RFC7230/6.3. */
-    if (request_message.header_fields["Connection"] == "close")
+    if (request_message.reject == true)
         cut_connection(socket);
-    else if (request_message.protocol_version >= "HTTP/1.1")
-        /* persistent connection */;
-    else if (request_message.protocol_version == "HTTP/1.0")
-    {
-        if (request_message.header_fields["Connection"] == "keep-alive")
-        {
-            /* NEED: if recipient is not a proxy */
-            /* then persistent connection */
-            /* else cut connection */
-        }
-        else
-            cut_connection(socket);
-    }
-    else
-        assert(false); /* protocol version is not properly parsed */
 }
 
 /* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
@@ -311,7 +294,27 @@ void server::format_http_request(http_request& request)
     handle_pragma();
     handle_range();
     handle_TE();
-    (void)request;
+
+    /* RFC7230/6.3. */
+    if (request.reject == true) /* if 'request' is rejected, no need to further analyse */
+        return ;
+    if (request.header_fields["Connection"] == "close")
+        request.reject = true;
+    else if (request.protocol_version >= "HTTP/1.1")
+        /* persistent connection */;
+    else if (request.protocol_version == "HTTP/1.0")
+    {
+        if (request.header_fields["Connection"] == "keep-alive")
+        {
+            /* NEED: if recipient is not a proxy */
+            /* then persistent connection */
+            /* else cut connection */
+        }
+        else
+            request.reject = true;
+    }
+    else
+        assert(false); /* protocol version is not properly parsed or a case is not handled */
 }
 
 /* CONTROLS */
