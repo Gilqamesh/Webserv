@@ -1,6 +1,5 @@
 #include "server.hpp"
 #include "utils.hpp"
-#include <signal.h>
 #include <cstdio>
 
 /*

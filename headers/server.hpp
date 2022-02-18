@@ -53,7 +53,6 @@ private:
     void            handle_connection(int socket);
     http_request    parse_request_header(int socket);
     void            router(int socket, const http_request& request);
-    void            signalHandler(int dummy);
 
     /* format http request and its control functions */
     void            format_http_request(http_request& request);
