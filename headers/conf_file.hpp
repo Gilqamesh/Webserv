@@ -4,30 +4,28 @@
 # include <vector>
 # include <iostream>
 # include <fstream>
-
-typedef enum	e_config
-{
-	NONE,
-	PORT,
-	ROOT,
-	INDEX,
-	LOCATION,
-	PATH_NAME,
-	SERVER_NAME
-}				t_config;
+# include <cmath>
+# include <map>
 
 typedef struct s_location
 {
-	std::string	root;
-	std::string	index;
-	std::string	path_name;
+	int							autoindex;
+	off_t						client_max_body_size;
+	std::string					root;
+	std::string					index;
+	std::string					route;
+	std::string					language; // would be cool to implement
+	std::string					media_type;
+	std::vector<std::string>	methods;
 }			t_location;
 
 typedef struct s_server
 {
-	int						port;
-	std::string				server_name;
-	std::vector<t_location>	locations;
+	int							port;
+	off_t						client_max_body_size;
+	std::string					server_name;
+	std::vector<t_location>		locations;
+	std::map<int, std::string>	error_page;
 }			t_server;
 
 class conf_file
@@ -45,10 +43,11 @@ class conf_file
 		void						parse_location(int idx, int start);
 		void						error(std::string message) const;
 		bool						is_number(std::string& port) const;
+		bool						get_server_config(std::string& line);
 		bool						line_is_empty(std::string& line) const;
 		bool						line_is_comment(std::string& line) const;
 		bool						header_is_valid(std::string& front, std::string& back) const;
-		t_config					get_server_config(std::string& line);
+		off_t						convert_to_bytes(std::string& size) const;
 		const std::string			get_line_without_spaces(std::string& line) const;
 		std::vector<std::string>	get_words(std::string& line) const;
 	public:

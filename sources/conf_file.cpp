@@ -56,7 +56,7 @@ void					conf_file::parse_server()
 			error("invalid header");
 		for (size_t j = 1; j < _input[i].size() - 1; j++)
 		{
-			if (get_server_config(_input[i][j]) == LOCATION)
+			if (get_server_config(_input[i][j]))
 			{
 				parse_location(i, j);
 				while (get_line_without_spaces(_input[i][j]) != "}")
@@ -68,30 +68,101 @@ void					conf_file::parse_server()
 	}
 }
 
+bool					conf_file::get_server_config(std::string &line)
+{
+	std::vector<std::string>	words;
+
+	words = get_words(line);
+	if (words.front() == "location" && words.size() == 3 && words.back() == "{")
+		return (1);
+	if (words.back().back() != ';')
+		error("no semicolon");
+	words.back().pop_back();
+	if (words.back().empty())
+		error("wrong config value");
+	if (words.size() == 3 && words.front() == "error_page")
+	{
+		if (!is_number(words[1]))
+			error("wrong error num");
+		_server_buf.error_page.insert(std::pair<int, std::string>(std::stoi(words[1]), words.back()));
+	}
+	else if (words.size() == 2 && words.front() == "listen")
+	{
+		if (!is_number(words[1]) || _server_buf.port != -1)
+			error("incorrect port");
+		_server_buf.port = std::stoi(words[1]);
+	}
+	else if (words.size() == 2 && words.front() == "server_name")
+	{
+		if (!_server_buf.server_name.empty())
+			error("server_name already exist");
+		_server_buf.server_name = words[1];
+	}
+	else if (words.size() == 2 && words.front() == "client_max_body_size")
+	{
+		if (_server_buf.client_max_body_size != -1)
+			error("client_max_body_size already exist");
+		_server_buf.client_max_body_size = convert_to_bytes(words[1]);
+	}
+	else
+		error("wrong config name");
+	return (0);
+}
+
 void					conf_file::parse_location(int idx, int start)
 {
 	std::vector<std::string>	words;
 
 	words = get_words(_input[idx][start]);
-	_location_buf.path_name = words[1];
+	_location_buf.route = words[1];
 	start++;
 	while (get_line_without_spaces(_input[idx][start]) != "}")
 	{
 		words = get_words(_input[idx][start]);
-		if (words.size() != 2 || words[1].back() != ';')
-			error("invalid line");
-		words[1].pop_back();
-		if (words.front() == "root")
+		if (words.back().back() != ';')
+			error("no semicolon");
+		words.back().pop_back();
+		if (words.back().empty())
+			error("wrong config value");
+		if (words.size() == 2 && words.front() == "root")
 		{
 			if (!_location_buf.root.empty())
 				error("root aleady exist");
 			_location_buf.root = words[1];
 		}
-		else if (words.front() == "index")
+		else if (words.size() == 2 && words.front() == "index")
 		{
 			if (!_location_buf.index.empty())
 				error("index already exist");
 			_location_buf.index = words[1];
+			_location_buf.media_type = words[1].substr(words[1].find_last_of('.'), words[1].size());
+		}
+		else if (words.size() > 2 && words.front() == "method")
+		{
+			for (size_t i = 1; i < words.size(); i++)
+			{
+				for (size_t j = 0; j < _location_buf.methods.size(); j++)
+					if (_location_buf.methods[j] == words[i])
+						error("method already exist");
+				_location_buf.methods.push_back(words[i]);
+			}
+		}
+		else if (words.size() == 2 && words.front() == "client_max_body_size")
+		{
+			if (_location_buf.client_max_body_size != -1)
+				error("client_max_body_size for location already exist");
+			_location_buf.client_max_body_size = convert_to_bytes(words[1]);
+		}
+		else if (words.size() == 2 && words.front() == "autoindex")
+		{
+			if (_location_buf.autoindex != -1)
+				error("autoindex already exist");
+			if (words[1] == "on")
+				_location_buf.autoindex = 1;
+			else if (words[1] == "off")
+				_location_buf.autoindex = 0;
+			else
+				error("wrong autoindex value");
 		}
 		else
 			error("worong location config name");
@@ -104,47 +175,53 @@ void					conf_file::parse_location(int idx, int start)
 void						conf_file::update_server_buffer()
 {
 	_server_buf.port = -1;
+	_server_buf.client_max_body_size = -1;
 	if (!_server_buf.locations.empty())
 		_server_buf.locations.clear();
 	if (!_server_buf.server_name.empty())
 		_server_buf.server_name.clear();
+	if (!_server_buf.error_page.empty())
+		_server_buf.error_page.clear();
 }
 
 void						conf_file::update_location_buffer()
 {
+	_location_buf.client_max_body_size = -1;
+	_location_buf.autoindex = -1;
 	if (!_location_buf.root.empty())
 		_location_buf.root.clear();
 	if (!_location_buf.index.empty())
 		_location_buf.index.clear();
-	if (!_location_buf.path_name.empty())
-		_location_buf.path_name.clear();
+	if (!_location_buf.route.empty())
+		_location_buf.route.clear();
+	if (!_location_buf.methods.empty())
+		_location_buf.methods.clear();
+	if (!_location_buf.media_type.empty())
+		_location_buf.media_type.clear();
 }
 
-t_config					conf_file::get_server_config(std::string &line)
+off_t						conf_file::convert_to_bytes(std::string& size) const
 {
-	std::vector<std::string>	words;
+	size_t		i;
+	std::string	type;
 
-	words = get_words(line);
-	if (words.front() == "location" && words.size() == 3 && words.back() == "{")
-		return (LOCATION);
-	if (words.size() != 2 || words[1].back() != ';')
-		error("invalid line");
-	words[1].pop_back();
-	if (words.front() == "listen")
-	{
-		if (!is_number(words[1]) || _server_buf.port != -1)
-			error("incorrect port");
-		_server_buf.port = std::stoi(words[1]);
-	}
-	else if (words.front() == "server_name")
-	{
-		if (!_server_buf.server_name.empty())
-			error("server_name already exist");
-		_server_buf.server_name = words[1];
-	}
+	for (i = 0; i < size.size(); i++)
+		if (!isdigit(size[i]))
+			break ;
+	if (i == 0)
+		error("wrong client_max_body_size");
+	type = size.substr(i, size.size() - i);
+	if (type == "B" || type.empty())
+		return (stoi(size.substr(0, i)));
+	else if (type == "KB" || type == "K")
+		return (stoi(size.substr(0, i)) * 1024);
+	else if (type == "MB" || type == "M")
+		return (stoi(size.substr(0, i)) * pow(1024, 2));
+	else if (type == "GB" || type == "G")
+		return (stoi(size.substr(0, i)) * pow(1024, 3));
 	else
-		error("wrong config name");
-	return (NONE);
+		error("wrong client_max_body_size size type");
+	return (0);
 }
 
 std::vector<std::string>	conf_file::get_words(std::string &line) const
@@ -234,7 +311,7 @@ void	conf_file::print()
 		{
 			std::cout << _servers[i].locations[j].root << std::endl;
 			std::cout << _servers[i].locations[j].index << std::endl;
-			std::cout << _servers[i].locations[j].path_name << std::endl;
+			std::cout << _servers[i].locations[j].route << std::endl;
 		}
 	}
 }

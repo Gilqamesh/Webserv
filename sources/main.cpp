@@ -21,7 +21,7 @@ int main(int argc, char **argv)
         {
             server  webserv(configs[i].port, 3);
             for (size_t j = 0; j < configs[i].locations.size(); j++)
-                webserv.cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].path_name);
+                webserv.cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route);
             webserv.server_listen();
         }
     }

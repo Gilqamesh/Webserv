@@ -266,7 +266,7 @@ http_request server::parse_request_header(int socket)
     */
     while ((current_line = get_next_line(socket)).size())
     {
-        // LOG(current_line); 
+        LOG(current_line); 
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
                 return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
