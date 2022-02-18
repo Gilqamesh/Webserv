@@ -106,7 +106,7 @@ void server::server_listen(void)
             if (fd == server_socket_fd)                 // receive new connection
                 accept_connection(fd);
             else if (evList[i].filter == EVFILT_READ)
-			{
+            {
                 if (evList[i].flags & EV_EOF)          // client disconnected
                     cut_connection(fd);
                 else
