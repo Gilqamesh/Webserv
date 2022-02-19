@@ -10,6 +10,7 @@
 # include "http_request.hpp"
 # include "http_response.hpp"
 # include "resource.hpp"
+# include "CGI.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -40,6 +41,7 @@ private:
     std::unordered_set<char>                        header_whitespace_characters;
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
+    std::string                                     hostname;
 public:
     server(int port, int backlog);
     ~server();
@@ -84,6 +86,7 @@ private:
 
     void            initialize_constants(void); // helper
     void            send_timeout(int socket); /* Send response: 408 Request Timeout */
+    void            add_script_meta_variables(CGI &script, const http_request &request);
 };
 
 #endif

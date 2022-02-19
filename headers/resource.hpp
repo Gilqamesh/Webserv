@@ -14,6 +14,14 @@ struct resource
     std::string                     content_location;
     std::unordered_set<std::string> allowed_methods;
     std::string                     content;
+    /* If the resource is static, then:
+    *   easy to cache
+    *   does not require cgi as there exist only one representation
+    */
+    bool                            is_static;
+    std::string                     script_path;
+    /* Optional */
+    // bool                            needs_authentication;
 };
 
 #endif

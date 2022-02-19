@@ -73,4 +73,15 @@ int main(void)
 
     // printf("%s\n",buffer );
     // return 0;
+
+    // TEST getcwd
+    // LOG(getcwd(NULL, 0));
+
+    // TEST to_upper
+    // LOG(to_upper("a8c&sLSdoA_SD2dfc ;a"));
+
+    // TEST replace
+    std::string str("-asd_-daslads924-3-9fds8_");
+    std::replace(str.begin(), str.end(), '-', '_');
+    LOG(str);
 }
