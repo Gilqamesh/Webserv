@@ -38,6 +38,7 @@ private:
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
+    std::string                                     http_version;
     unsigned long                                   start_timestamp;
 public:
     server(int port, int backlog);
@@ -54,7 +55,7 @@ private:
     void            cut_connection(int socket);
     void            handle_connection(int socket);
     http_request    parse_request_header(int socket);
-    void            router(int socket, const http_request& request);
+    void            router(int socket, const http_response &response);
 
     /* format http request and its control functions */
     void            format_http_request(http_request& request);
@@ -82,6 +83,7 @@ private:
     void            payload_header_fields(const http_request &request, http_response &response);
 
     void            initialize_constants(void); // helper
+    void            send_timeout(int socket); /* Send response: 408 Request Timeout */
 };
 
 #endif

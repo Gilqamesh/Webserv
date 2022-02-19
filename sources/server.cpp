@@ -14,6 +14,8 @@ void server::initialize_constants(void)
     /* whitespaces in header fields rfc7230/3.2.3 */
     header_whitespace_characters.insert(' ');
     header_whitespace_characters.insert('\t');
+    /* http protocol of the server */
+    http_version = "HTTP/1.1";
 }
 
 server::server(int port, int backlog)
@@ -82,7 +84,6 @@ server::~server()
 void server::server_listen(void)
 {
     start_timestamp = get_current_timestamp();
-
     // EV_SET() -> initialize a kevent structure, here our listening server
     /* No EV_CLEAR, otherwise when backlog is full, the connection request has to
     * be repeated.. instead let them hang in the queue until they are served
@@ -119,13 +120,16 @@ void server::server_listen(void)
             	handle_connection(fd);
             }
             else if (evList[i].filter == EVFILT_TIMER)  /* socket is expired */
+            {
+                send_timeout(fd); /* 408 Request Timeout */
                 cut_connection(fd);
+            }
         }
     }
 }
 
 /*
-* load a file from 'path' to match a specific 'route'
+* load a file from 'path' to match a specific 'route' (URL)
 * NEED: content-type for resource
 * NEED: allowed_methods coming from config file
 * OPTIONAL: content-encoding, content_language, content-location
@@ -223,16 +227,17 @@ void server::cut_connection(int socket)
 }
 
 /* handle the ready to read/write socket
-* 1. Parse request
+* 1. Parse request (without body currently)
 * 2. Format response
-* 3. Send response in 'router'
+* 3. Send response to 'router'
 * 4. After responding close connection if needed
 */
 void server::handle_connection(int socket)
 {
     http_request request_message = parse_request_header(socket);
     format_http_request(request_message);
-    router(socket, request_message);
+    http_response response = format_http_response(request_message);
+    router(socket, response);
     if (request_message.reject == true)
         cut_connection(socket);
 }
@@ -278,7 +283,7 @@ http_request server::parse_request_header(int socket)
     */
     while ((current_line = get_next_line(socket)).size())
     {
-        // LOG(current_line); 
+        // LOG(current_line);
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
                 return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
@@ -296,6 +301,8 @@ http_request server::parse_request_header(int socket)
         else
             message.header_fields[field_name] = field_value;
     }
+    while ((current_line = get_next_line(socket)).size())
+        message.payload += current_line;
     return (message);
 }
 
@@ -388,7 +395,7 @@ void            server::request_control_TE(http_request &request)
 http_response server::format_http_response(const http_request& request)
 {
     http_response response;
-    response.http_version = "HTTP/1.1";
+    response.http_version = http_version;
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
@@ -419,20 +426,17 @@ http_response server::format_http_response(const http_request& request)
         response.reason_phrase = "OK";
     }
 
-    if (match_pattern(response.status_code, "2..") == true)
-    {
-        /* Control Data RFC7231/7.1. */
-        response_control_handle_age(response);
-        response_control_cache_control(response);
-        response_control_expires(response);
-        response_control_date(response);
-        response_control_location(response);
-        response_control_retry_after(response);
-        response_control_vary(response);
-        response_control_warning(response);
+    /* Control Data RFC7231/7.1. */
+    response_control_handle_age(response);
+    response_control_cache_control(response);
+    response_control_expires(response);
+    response_control_date(response);
+    response_control_location(response);
+    response_control_retry_after(response);
+    response_control_vary(response);
+    response_control_warning(response);
 
-        representation_metadata(request, response);
-    }
+    representation_metadata(request, response);
 
     payload_header_fields(request, response);
 
@@ -497,12 +501,19 @@ void            server::response_control_warning(http_response &response)
 */
 void server::representation_metadata(const http_request &request, http_response &response)
 {
+    if (cached_resources.count(request.target) == 0)
+    {
+        response.header_fields["Content-Type"] = "text/html";
+        response.header_fields["Content-Language"] = "en-US";
+        return ;
+    }
     response.header_fields["Content-Type"] = cached_resources[request.target].content_type;
     for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
         response.header_fields["Content-Encoding"] += response.header_fields.count("Content-Encoding") ? "," + *cit : *cit;
     for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_language.begin(); cit != cached_resources[request.target].content_language.end(); ++cit)
         response.header_fields["Content-Language"] += response.header_fields.count("Content-Language") ? "," + *cit : *cit;
-    // response.header_fields["Content-Location"] = cached_resources[request.target].content_location;
+    if (cached_resources[request.target].content_location.length())
+        response.header_fields["Content-Location"] = cached_resources[request.target].content_location;
 }
 
 void server::representation_metadata(http_request &request)
@@ -518,7 +529,7 @@ void server::representation_metadata(http_request &request)
 */
 void server::payload_header_fields(const http_request &request, http_response &response)
 {
-    if (match_pattern(response.status_code, "4..") == true)
+    if (match_pattern(response.status_code, "[45]..") == true)
     {
         response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
         return ;
@@ -543,10 +554,8 @@ void server::payload_header_fields(const http_request &request, http_response &r
 * 2. Send response
 * Warning: The message might not fit into the 'send' buffer which is not handled
 */
-void server::router(int socket, const http_request &request)
+void server::router(int socket, const http_response &response)
 {
-    http_response response = format_http_response(request);
-
     // LOG("Request target: " << request.target);
     // LOG("Status-line: " << response.http_version << " " << response.status_code << " " << response.reason_phrase);
     // LOG("Header fields");
@@ -560,4 +569,15 @@ void server::router(int socket, const http_request &request)
     message += "\n";
     message += response.payload;
     send(socket, message.c_str(), message.length(), 0);
+}
+
+void server::send_timeout(int socket)
+{
+    http_response response;
+    response.http_version = http_version;
+    response.status_code = "408";
+    response.reason_phrase = "Request Timeout";
+    response.header_fields["Connection"] = "close";
+    response.payload = cached_resources["/error"].content;
+    router(socket, response);
 }
