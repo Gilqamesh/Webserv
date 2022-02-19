@@ -29,7 +29,7 @@ private:
     int                                             server_port;
     int                                             server_backlog;
     int                                             kq; /* holds all the events we are interested in */
-    struct kevent                                   evSet;
+    struct kevent                                   event;
     struct kevent                                   evList[MAX_EVENTS];
     fd_set                                          connected_sockets;
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */

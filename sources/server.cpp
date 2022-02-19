@@ -84,10 +84,13 @@ void server::server_listen(void)
     start_timestamp = get_current_timestamp();
 
     // EV_SET() -> initialize a kevent structure, here our listening server
-    EV_SET(&evSet, server_socket_fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    /* No EV_CLEAR, otherwise when backlog is full, the connection request has to
+    * be repeated.. instead let them hang in the queue until they are served
+    */
+    EV_SET(&event, server_socket_fd, EVFILT_READ, EV_ADD /*| EV_CLEAR */, 0, 0, NULL);
 
     // ...and register it to the kqueue;
-    if (kevent(kq, &evSet, 1, NULL, 0, 0) == -1)
+    if (kevent(kq, &event, 1, NULL, 0, 0) == -1)
         TERMINATE("Registration failed");
 
     while (true)
@@ -100,21 +103,22 @@ void server::server_listen(void)
         for (int i = 0; i < nev; ++i)
         {
             int fd = static_cast<int>(evList[i].ident);
-            if (fd == server_socket_fd)                 // receive new connection
+            if (fd == server_socket_fd)                 /* receive new connection */
                 accept_connection(fd);
-            else if (evList[i].filter == EVFILT_READ)
-            	handle_connection(fd);
-            // else if (evList[i].filter == EVFILT_WRITE)
-            // {
-            //     // TODO -> handle EVFILT_WRITE
-            // }
-            else if (evList[i].filter == EVFILT_TIMER)  // check for timeout
+            else if (evList[i].filter == EVFILT_READ)   /* socket is ready to be read */
             {
-                std::set<int>::iterator it = connected_sockets_set.find(fd);
-                if (it != connected_sockets_set.end())
+                if (evList[i].flags & EV_EOF) /* client side shutdown */
+                {
                     cut_connection(fd);
+                    continue ;
+                }
+                /* update socket's timeout event */
+                EV_SET(&event, fd, EVFILT_TIMER, EV_ADD, 0, TIMEOUT_TO_CUT_CONNECTION * 1000, NULL);
+                kevent(kq, &event, 1, NULL, 0, NULL);
+                /* handle connection */
+            	handle_connection(fd);
             }
-            else if (evList[i].flags & EV_EOF)          // client disconnected
+            else if (evList[i].filter == EVFILT_TIMER)  /* socket is expired */
                 cut_connection(fd);
         }
     }
@@ -171,20 +175,21 @@ void server::accept_connection(int socket)
     if (new_socket == -1)
         TERMINATE("accept failed");
 
-    // Adding events we are interested in:
+    /* register event for reading on socket */
+    EV_SET(&event, new_socket, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    kevent(kq, &event, 1, NULL, 0, NULL);
 
-    // register listening handler
-    EV_SET(&evSet, new_socket, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
+	/* register timeout for the socket
+    * the idea with this is that this event will be updated on incoming requests
+    * so it only triggers if there wasn't a request for the specified time
+    */
+    EV_SET(&event, new_socket, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, TIMEOUT_TO_CUT_CONNECTION * 1000, NULL);
+    kevent(kq, &event, 1, NULL, 0, NULL);
 
-    // register writing handler
-    EV_SET(&evSet, new_socket, EVFILT_WRITE, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
-
-	// register timeout handler
-    EV_SET(&evSet, new_socket, EVFILT_TIMER, EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 5000, NULL);
-    kevent(kq, &evSet, 1, NULL, 0, NULL);
-
+    /* turn on non-blocking behavior for this file descriptor
+    * any function that would be blocking with this file descriptor will instead not block
+    * and return with -1 with errno set to EWOULDBLOCK
+    */
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("fcntl failed");
 	connected_sockets_set.insert(new_socket);
@@ -204,7 +209,12 @@ void server::cut_connection(int socket)
 {
     /* close socket after we are done communicating */
     close(socket);
+    // EV_SET(kev, ident,	filter,	flags, fflags, data, udata);
     // Socket is automatically removed from the kq by the kernel.
+    EV_SET(&event, socket, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    kevent(kq, &event, 1, NULL, 0, NULL);
+    EV_SET(&event, socket, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
+    kevent(kq, &event, 1, NULL, 0, NULL);
     connected_sockets_set.erase(socket);
     if (socket == server_socket_fd)
         LOG_TIME("Server disconnected on socket: " << socket);
