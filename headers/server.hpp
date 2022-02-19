@@ -25,9 +25,10 @@
 class server
 {
 private:
-    int                                             server_socket_fd;
-    int                                             server_port;
-    int                                             server_backlog;
+    // ToDo: write a class that contains the server_socket_information
+    std::vector<int>                                server_socket_fd;
+    std::vector<int>                                server_port;
+    std::vector<int>                                server_backlog;
     int                                             kq; /* holds all the events we are interested in */
     struct kevent                                   event;
     struct kevent                                   evList[MAX_EVENTS];
@@ -41,13 +42,13 @@ private:
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
 public:
+    server();
     server(int port, int backlog);
     ~server();
 
     void server_listen(void);
     void cache_file(const std::string &path, const std::string &route);
 private:
-    server();
     server(const server& other);
     server &operator=(const server& other);
 
