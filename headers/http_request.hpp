@@ -8,8 +8,6 @@ struct http_request
 {
     http_request();
     http_request(bool r);
-    http_request(const http_request &other);
-    http_request &operator=(const http_request &other);
     ~http_request();
 
     static http_request reject_http_request(void);
@@ -35,6 +33,8 @@ struct http_request
     std::string                                     net_path;
     std::string                                     abs_path;
     std::string                                     query;
+
+    int                                             socket; /* request is read from this socket */
 };
 
 #endif

@@ -19,7 +19,7 @@ struct resource
     *   does not require cgi as there exist only one representation
     */
     bool                            is_static;
-    std::string                     script_path;
+    std::string                     script_path; // this might just be the same as 'target'
     /* Optional */
     // bool                            needs_authentication;
 };

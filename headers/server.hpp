@@ -35,19 +35,21 @@ private:
     fd_set                                          connected_sockets;
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
     std::set<int>                                   connected_sockets_set; /* socket */
+    std::unordered_map<int, int>                    cgi_responses; /* cgi socket - client socket */
     // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
-    std::string                                     hostname;
+    std::string                                     hostname; /* ipv4 */
 public:
     server(int port, int backlog);
     ~server();
 
     void server_listen(void);
-    void cache_file(const std::string &path, const std::string &route);
+    void cache_file(const std::string &path, const std::string &route, bool is_static = true);
+    void add_resource(const resource &resource);
 private:
     server();
     server(const server& other);

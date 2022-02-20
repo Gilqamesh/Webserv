@@ -2,7 +2,9 @@
 #include "utils.hpp"
 #include <errno.h>
 
-int main(void)
+#define BUFFER_SIZE 10000
+
+int main(int argc, char **argv)
 {
     /* TEST match_pattern */
     // LOG(match_pattern("hello", "hello"));
@@ -81,7 +83,27 @@ int main(void)
     // LOG(to_upper("a8c&sLSdoA_SD2dfc ;a"));
 
     // TEST replace
-    std::string str("-asd_-daslads924-3-9fds8_");
-    std::replace(str.begin(), str.end(), '-', '_');
-    LOG(str);
+    // std::string str("-asd_-daslads924-3-9fds8_");
+    // std::replace(str.begin(), str.end(), '-', '_');
+    // LOG(str);
+
+    // TEST CGI script
+    if (argc != 2)
+        TERMINATE("usage: ./<app_name> <file_to_serve>");
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0, BUFFER_SIZE);
+    int fd;
+    if ((fd = open(argv[1], O_RDONLY)) == -1)
+        TERMINATE(("open failed" + std::string(argv[1])).c_str());
+    read(fd, buffer, BUFFER_SIZE - 1);
+    close(fd);
+    if ((fd = open("index.html", O_RDONLY)) == -1)
+        TERMINATE("open failed");
+    std::string response(buffer);
+    memset(buffer, 0, BUFFER_SIZE);
+    read(fd, buffer, BUFFER_SIZE - 1);
+    response += buffer;
+    close(fd);
+    write(STDOUT_FILENO, response.data(), response.length());
+    LOG_E("script has finished executing");
 }

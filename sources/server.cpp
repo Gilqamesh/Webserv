@@ -106,9 +106,28 @@ void server::server_listen(void)
         // returns number of events
         int nev = kevent(kq, NULL, 0, evList, MAX_EVENTS, NULL);
 
+        PRINT_HERE();
         for (int i = 0; i < nev; ++i)
         {
+            PRINT_HERE();
             int fd = static_cast<int>(evList[i].ident);
+            if (evList[i].udata != NULL) /* CGI socket */
+            {
+                if (connected_sockets_set.count(cgi_responses[*(int *)evList[i].udata])) /* if we still have connection with the client send the response */
+                {
+                    std::string response;
+                    std::string tmp;
+                    PRINT_HERE();
+                    while ((tmp = get_next_line(*(int *)evList[i].udata)).length())
+                        response += tmp;
+                    PRINT_HERE();
+                    LOG("Response from CGI: " << response);
+                    exit(1);
+                    send(cgi_responses[*(int *)evList[i].udata], response.data(), response.length(), 0);
+                }
+                cut_connection(*(int *)evList[i].udata);
+                continue ;
+            }
             if (fd == server_socket_fd)                 /* receive new connection */
                 accept_connection(fd);
             else if (evList[i].filter == EVFILT_READ)   /* socket is ready to be read */
@@ -134,13 +153,15 @@ void server::server_listen(void)
 }
 
 /*
+* server::add_resource() should be used in the future for this purpose
+*
 * load a file from 'path' to match a specific 'route' (URL)
 * NEED: content-type for resource
 * NEED: allowed_methods coming from config file
 * NEED: specify if resource is served statically or dynamically, in which case script_path also needs to be provided
 * OPTIONAL: content-encoding, content_language, content-location
 */
-void server::cache_file(const std::string &path, const std::string &route)
+void server::cache_file(const std::string &path, const std::string &route, bool is_static)
 {
     if (cached_resources.count(route))
     {
@@ -168,10 +189,15 @@ void server::cache_file(const std::string &path, const std::string &route)
     res.allowed_methods.insert("GET");
     res.allowed_methods.insert("HEAD");
     /* for now hard-coded */
-    res.is_static = true;
+    res.is_static = is_static;
     /* if resource is dynamic, this also has to be provided */
     // res.script_path = ...;
-    cached_resources[route] = res;
+    add_resource(res);
+}
+
+void server::add_resource(const resource &resource)
+{
+    cached_resources[resource.target] = resource;
 }
 
 /*
@@ -240,7 +266,7 @@ void server::cut_connection(int socket)
 /* handle the ready to read/write socket
 * 1. Parse request (without body currently)
 * 2. Format response
-* 3. Send response to 'router'
+* 3. Send response to 'router' or respond later
 * 4. After responding close connection if needed
 */
 void server::handle_connection(int socket)
@@ -258,7 +284,8 @@ void server::handle_connection(int socket)
 
     format_http_request(request);
     http_response response = format_http_response(request);
-    router(socket, response);
+    if (response.reject == false)
+        router(socket, response);
     if (request.reject == true)
         cut_connection(socket);
 }
@@ -275,6 +302,7 @@ void server::handle_connection(int socket)
 http_request server::parse_request_header(int socket)
 {
     http_request request(false);
+    request.socket = socket;
     /* Read and store request line
     * syntax checking for the request line happens here (RFC7230/3.1.1.)
     */
@@ -336,10 +364,10 @@ http_request server::parse_request_header(int socket)
     request.URI = request.scheme + ":" + request.net_path;
     if (request.query.length())
         request.URI += "?" + request.query;
-    LOG("Abs path: " << request.abs_path);
-    LOG("Net path: " << request.net_path);
-    LOG("Query: " << request.query);
-    LOG("URI: " << request.URI);
+    // LOG("Abs path: " << request.abs_path);
+    // LOG("Net path: " << request.net_path);
+    // LOG("Query: " << request.query);
+    // LOG("URI: " << request.URI);
     while ((current_line = get_next_line(socket)).size())
         request.payload += current_line;
     // LOG("Payload: " << request.payload);
@@ -482,30 +510,40 @@ http_response server::format_http_response(const http_request& request)
     payload_header_fields(request, response);
 
     /* add payload */
+    if (cached_resources[request.target].is_static == false) /* if resource is dynamic */
+    {
+        /* NEED: execute the corresponding script with CGI
+        * 1. pass meta_variables as environment variables to the script
+        * 2. fork and execute script
+        * 3. retrieve output at some point somehow
+        *   we can probably set up a socket which is inherited to the script - which will
+        *   be the communication between server and the CGI - and then add an event for it
+        *   so that it can be later retrieved from the event queue,
+        *   after which we can respond to the client.. if the event passes a certain timeout,
+        *   kill the process and handle client accordingly
+        */
+        int cgi_pipe[2];
+        if (pipe(cgi_pipe) == -1)
+            TERMINATE("pipe failed");
+        if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        /* write request payload into socket */
+        cgi_responses[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+        CGI script(cgi_pipe, request.payload);
+        add_script_meta_variables(script, request);
+        script.execute();
+        close(cgi_pipe[WRITE_END]);
+        /* register an event for this socket */
+        EV_SET(&event, cgi_pipe[READ_END], EVFILT_READ, EV_ADD , 0, 0, (int *)(&cgi_pipe[READ_END]));
+        kevent(kq, &event, 1, NULL, 0, NULL);
+        return (http_response::reject_http_response());
+    }
     if (match_pattern(response.status_code, "2..") == true)
     {
         if (response.header_fields.count("Content-Length"))
             response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
         else
-        {
-            if (cached_resources[request.target].is_static == false) /* if resource is dynamic */
-            {
-                /* NEED: execute the corresponding script with CGI
-                * 1. pass meta_variables as environment variables to the script
-                * 2. fork and execute script
-                * 3. retrieve output at some point somehow
-                *   we can probably set up a socket which is inherited to the script - which will
-                *   be the communication between server and the CGI - and then add an event for it
-                *   so that it can be later retrieved from the event queue,
-                *   after which we can respond to the client.. if the event passes a certain timeout,
-                *   kill the process and handle client accordingly
-                */
-               CGI script;
-               add_script_meta_variables(script, request);
-            }
-            else
-                response.payload = cached_resources[request.target].content;
-        }
+            response.payload = cached_resources[request.target].content;
     }
     else
         response.payload = cached_resources["/error"].content;

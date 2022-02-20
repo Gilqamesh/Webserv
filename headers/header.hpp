@@ -22,12 +22,16 @@
 # define LOG_E(x) (std::cerr << x << std::endl)
 # define LOG_TIME(x) (std::cout << x << " time: " << (get_current_timestamp() - start_timestamp) / 1000000.0 << " seconds" << std::endl)
 # define WARN(x) (LOG_E("Warning: " << x))
-# define TERMINATE(x) ({\
-    perror(x);\
-    exit(EXIT_FAILURE);\
-})
 # define PRINT_HERE() (LOG(__FILE__ << " " << __LINE__))
+# define TERMINATE(x) do {  \
+    PRINT_HERE();           \
+    perror(x);              \
+    exit(EXIT_FAILURE);     \
+    } while (0)
 # define TIMEOUT_TO_CUT_CONNECTION 5 /* in seconds */
 # define CRLF std::string("\x0d") /* Chrome CRLF is CR */
+/* for pipes */
+# define READ_END   0
+# define WRITE_END  1
 
 #endif

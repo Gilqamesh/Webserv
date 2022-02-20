@@ -12,26 +12,6 @@ http_request::http_request(bool r)
 
 }
 
-http_request::http_request(const http_request &other)
-    : method_token(other.method_token), target(other.target), protocol_version(other.protocol_version),
-    header_fields(other.header_fields), reject(other.reject)
-{
-
-}
-
-http_request &http_request::operator=(const http_request &other)
-{
-    if (this != &other)
-    {
-        method_token = other.method_token;
-        target = other.target;
-        protocol_version = other.protocol_version;
-        header_fields = other.header_fields;
-        reject = other.reject;
-    }
-    return (*this);
-}
-
 http_request::~http_request()
 {
 
