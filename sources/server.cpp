@@ -20,17 +20,20 @@ void server::initialize_constants(void)
 
 server::server()
 {
+    // ------------------------------------------------ //
+    
     // ToDo:
     // create "server_soocket_fds", "server_ports" and 
     // "server_backlogs" on the basis of the confic_file
+    // here a quick example:
 
     server_socket_fd.push_back(-1);
     server_port.push_back(40);
-    server_backlog.push_back(10);
 
-    server_socket_fd.push_back(-2);
+    server_socket_fd.push_back(-1);
     server_port.push_back(80);
-    server_backlog.push_back(10);
+
+    // ------------------------------------------------ //
 
     initialize_constants();
 
@@ -44,6 +47,7 @@ server::server()
         server_socket_fd[i] = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket_fd[i] == -1)
             TERMINATE("failed to create a socket");
+        server_backlog.insert(std::pair<int,int>(server_socket_fd[i], 10));
     }
     
 
@@ -70,7 +74,8 @@ server::server()
         // struct sockaddr_in address[1];
         std::memset(&address[i], 0, sizeof(address[i]));
         address[i].sin_family = AF_INET;
-        address[i].sin_addr.s_addr = htonl(INADDR_ANY);
+        // address[i].sin_addr.s_addr = htonl(INADDR_ANY); // or... ->next line
+        inet_pton(AF_INET, "0.0.0.0", &address[i].sin_addr);
         address[i].sin_port = htons(server_port[i]);
         if (bind(server_socket_fd[i], reinterpret_cast<struct sockaddr *>(&address[i]), sizeof(address[i])) == -1)
             TERMINATE("failed to bind the socket");
@@ -83,11 +88,13 @@ server::server()
     */
     for (int i = 0; i < static_cast<int>(server_socket_fd.size()); ++i)
     {
-        if (listen(server_socket_fd[i], server_backlog[i]) == -1)
+        if (listen(server_socket_fd[i], server_backlog[server_socket_fd[i]]) == -1)
             TERMINATE("listen failed");
         LOG("Server listens on port: " << server_port[i]);
         // connected_sockets_map.insert(std::make_pair<int, unsigned long>(server_socket_fd, get_current_timestamp()));
-        connected_sockets_set.insert(server_socket_fd[i]);
+        connected_sockets_map.insert(std::make_pair<int,int>(server_socket_fd[i], server_socket_fd[i]));
+        identifyServerSocket.insert(std::pair<int,int>(server_socket_fd[i], server_socket_fd[i]));
+        // connected_sockets_set.insert(server_socket_fd[i]);
     }
 
     // the kqueue holds all the events we are interested in
@@ -98,14 +105,11 @@ server::server()
 
 server::~server()
 {
-    while (connected_sockets_set.size())
-        cut_connection(*(connected_sockets_set.begin()));
-    server_socket_fd.clear();
-    server_socket_fd.shrink_to_fit();
-    server_port.clear();
-    server_port.shrink_to_fit();
-    server_backlog.clear();
-    server_backlog.shrink_to_fit();
+    //ToDo cut connection for ..._map
+
+    while (identifyServerSocket.size())
+        cut_connection(identifyServerSocket.begin()->second);
+    
 }
 
 /*
@@ -115,7 +119,6 @@ server::~server()
 void server::server_listen(void)
 {
     start_timestamp = get_current_timestamp();
-    bool accepted = false;
 
     for (int i = 0; i < static_cast<int>(server_socket_fd.size()); ++i)
     {
@@ -130,6 +133,7 @@ void server::server_listen(void)
             TERMINATE("Registration failed");
     }
 
+    bool accepted = false;
     while (true)
     {
         // call kevent(..) to receive incoming events and process them
@@ -216,8 +220,8 @@ void server::cache_file(const std::string &path, const std::string &route)
 void server::accept_connection(int socket)
 {
     /* do not accept connection if the backlog is full */
-    // ToDo: update connected_sockets_set and server_backlog[i]
-    if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog[0]))
+    // if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog[0]))
+    if (static_cast<int>(connected_sockets_map.count(socket)) >= server_backlog[socket])
         return ;
     struct sockaddr_storage addr;
     socklen_t socklen = sizeof(addr);
@@ -242,7 +246,9 @@ void server::accept_connection(int socket)
     */
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("fcntl failed");
-	connected_sockets_set.insert(new_socket);
+	// connected_sockets_set.insert(new_socket);
+    connected_sockets_map.insert(std::pair<int,int>(socket, new_socket));
+    identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
     LOG_TIME("Client joined from socket: " << new_socket);
 }
 
@@ -266,7 +272,32 @@ void server::cut_connection(int socket)
     kevent(kq, &event, 1, NULL, 0, NULL);
     EV_SET(&event, socket, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
     kevent(kq, &event, 1, NULL, 0, NULL);
-    connected_sockets_set.erase(socket);
+
+    // old...
+    // connected_sockets_set.erase(socket);
+
+    // new
+    // erase socket from multimap
+    // 1) get iterator range containing all pairs which have a certain key, here our server_socket_fd
+    //      -> identifyServerSocket[socket] contains the server_socket_fd
+    // 2) iterat over range and erase the pair that fits by erasing the iterator
+    //      -> erase(dentifyServerSocket[socket] aka server_socket_fd, socket)
+    typedef std::multimap<int,int>::iterator iterator;
+    std::pair<iterator, iterator> iterpair = connected_sockets_map.equal_range(identifyServerSocket[socket]);
+    iterator it = iterpair.first;
+    for (; it != iterpair.second; ++it) 
+    {
+        if (it->second == socket)
+        { 
+            connected_sockets_map.erase(it);
+            identifyServerSocket.erase(socket);
+            break;
+        }
+    }
+
+
+
+    connected_sockets_map.erase(identifyServerSocket[socket]);
     for (int i = 0; i < static_cast<int>(server_socket_fd.size()); ++i)
     {
         if (socket == server_socket_fd[i])

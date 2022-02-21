@@ -25,17 +25,16 @@
 class server
 {
 private:
-    // ToDo: write a class that contains the server_socket_information
     std::vector<int>                                server_socket_fd;
     std::vector<int>                                server_port;
-    std::vector<int>                                server_backlog;
+    std::map<int,int>                               server_backlog; /* server_socket_fd - backlog */
     int                                             kq; /* holds all the events we are interested in */
     struct kevent                                   event;
     struct kevent                                   evList[MAX_EVENTS];
-    fd_set                                          connected_sockets;
+    // std::set<int>                                   connected_sockets_set; /* socket */ -> old
+    std::multimap<int,int>                          connected_sockets_map;  // server_socket_fd - sockets
+    std::map<int,int>                               identifyServerSocket; // to identify to which server_socket_fd the new_socket belongs to
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
-    std::set<int>                                   connected_sockets_set; /* socket */
-    // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
