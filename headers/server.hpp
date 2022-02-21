@@ -15,7 +15,7 @@
 # include <sys/event.h>
 # include <sys/time.h>
 
-# define MAX_EVENTS 32 // for kqueue -> better put in config file?
+# define MAX_EVENTS 32 
 
 # define HEADER_WHITESPACES " \t"
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
