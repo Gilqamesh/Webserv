@@ -2,7 +2,7 @@
 
 int main(void)
 {
-    server test_server(40, 3);
+    server test_server;
     test_server.cache_file("views/index.html", "/");
     test_server.cache_file("views/about.html", "/about");
     test_server.cache_file("views/error.html", "/error");

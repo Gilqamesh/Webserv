@@ -16,7 +16,7 @@
 # include <sys/event.h>
 # include <sys/time.h>
 
-# define MAX_EVENTS 32 // for kqueue -> better put in config file?
+# define MAX_EVENTS 32 
 
 # define HEADER_WHITESPACES " \t"
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
@@ -26,17 +26,22 @@
 class server
 {
 private:
-    int                                             server_socket_fd;
-    int                                             server_port;
-    int                                             server_backlog;
+    std::vector<int>                                server_socket_fd;
+    std::vector<int>                                server_port;
+    std::map<int,int>                               server_backlog; /* server_socket_fd - backlog */
     int                                             kq; /* holds all the events we are interested in */
     struct kevent                                   event;
     struct kevent                                   evList[MAX_EVENTS];
-    fd_set                                          connected_sockets;
+    // std::set<int>                                   connected_sockets_set; /* socket */ -> old
+    std::multimap<int,int>                          connected_sockets_map;  // server_socket_fd - sockets
+    std::map<int,int>                               identifyServerSocket; // to identify to which server_socket_fd the new_socket belongs to
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
+<<<<<<< HEAD
     std::set<int>                                   connected_sockets_set; /* socket */
     std::unordered_map<int, int>                    cgi_responses; /* cgi socket - client socket */
     // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
+=======
+>>>>>>> 9b2bfd30f42b092a2d5d1efbfa97f2a765dcc302
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
@@ -44,6 +49,7 @@ private:
     unsigned long                                   start_timestamp;
     std::string                                     hostname; /* ipv4 */
 public:
+    server();
     server(int port, int backlog);
     ~server();
 
@@ -51,7 +57,6 @@ public:
     void cache_file(const std::string &path, const std::string &route, bool is_static = true);
     void add_resource(const resource &resource);
 private:
-    server();
     server(const server& other);
     server &operator=(const server& other);
 
