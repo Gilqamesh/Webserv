@@ -2,6 +2,7 @@
 # define SERVER_HPP
 
 # include "header.hpp"
+# include "Network.hpp"
 # include <set>
 # include <unordered_set>
 # include <map>
@@ -22,18 +23,14 @@
 # define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" + CRLF /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
 # define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*" + CRLF
 
+
 class server
 {
 private:
-    std::vector<int>                                server_socket_fd;
-    std::vector<int>                                server_port;
-    std::map<int,int>                               server_backlog; /* server_socket_fd - backlog */
-    int                                             kq; /* holds all the events we are interested in */
-    struct kevent                                   event;
-    struct kevent                                   evList[MAX_EVENTS];
-    // std::set<int>                                   connected_sockets_set; /* socket */ -> old
-    std::multimap<int,int>                          connected_sockets_map;  // server_socket_fd - sockets
-    std::map<int,int>                               identifyServerSocket; // to identify to which server_socket_fd the new_socket belongs to
+    int                                             server_socket_fd;
+    int                                             server_port;
+    int                                             server_backlog; /* server_socket_fd - backlog */
+	std::set<int>                                   connected_sockets_set; /* socket */
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
@@ -41,19 +38,22 @@ private:
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
 public:
-    server();
-    server(int port, int backlog);
+    server(int port, int backlog, unsigned long timestamp);
     ~server();
 
-    void server_listen(void);
-    void cache_file(const std::string &path, const std::string &route);
-private:
+    void 			server_listen(void);
+    void 			cache_file(const std::string &path, const std::string &route);
+    int const       &getServerSocketFd(void) const;
+    int             accept_connection(int kq, int socket, struct kevent *event);
+    void            cut_connection(int kq, int socket, struct kevent *event);
+    void            handle_connection(int kq, int socket, struct kevent *event);
+    void            send_timeout(int socket); /* Send response: 408 Request Timeout */
+
     server(const server& other);
     server &operator=(const server& other);
+    server();
+private:
 
-    void            accept_connection(int socket);
-    void            cut_connection(int socket);
-    void            handle_connection(int socket);
     http_request    parse_request_header(int socket);
     void            router(int socket, const http_response &response);
 
@@ -83,7 +83,6 @@ private:
     void            payload_header_fields(const http_request &request, http_response &response);
 
     void            initialize_constants(void); // helper
-    void            send_timeout(int socket); /* Send response: 408 Request Timeout */
 };
 
 #endif
