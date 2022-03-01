@@ -91,4 +91,7 @@ void Network::runNetwork()
 
 Network::Network() {}
 
-Network::~Network() {}
+Network::~Network()
+{
+    // ToDo: cut connection of servers
+}
