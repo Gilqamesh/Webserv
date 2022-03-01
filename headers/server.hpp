@@ -38,9 +38,10 @@ private:
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
 public:
-    server(int port, int backlog, unsigned long timestamp);
+    server();
     ~server();
 
+    void            construct(int port, int backlog, unsigned long timestamp);
     void 			server_listen(void);
     void 			cache_file(const std::string &path, const std::string &route);
     int const       &getServerSocketFd(void) const;
@@ -51,7 +52,6 @@ public:
 
     server(const server& other);
     server &operator=(const server& other);
-    server();
 private:
 
     http_request    parse_request_header(int socket);

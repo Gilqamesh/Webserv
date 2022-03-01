@@ -1,10 +1,13 @@
 #include "Network.hpp"
 
-int main(void)
+int main(int argc, char **argv)
 {
-    Network network;
+    Network                 network;
 
-	network.initNetwork();
+    if (argc != 2)
+        return (1);
+
+	network.initNetwork(argv[1]);
 	network.runNetwork();
 	
 	// server test_server;

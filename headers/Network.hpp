@@ -5,6 +5,7 @@
 # include "utils.hpp"
 # include <set>
 # include <map>
+# include "conf_file.hpp"
 
 # include <sys/types.h> // kqueue, kevent
 # include <sys/event.h>
@@ -19,7 +20,7 @@ class Network
 	public:
 		Network();
 		~Network();
-		void initNetwork();
+		void initNetwork(char *file_name);
 		void runNetwork();
 
 		int				kq; /* holds all the events we are interested in */

@@ -1,25 +1,25 @@
 #include "Network.hpp"
 
-void Network::initNetwork()
+void Network::initNetwork(char *file_name)
 {
 	// the kqueue holds all the events we are interested in
     // to start, we simply create an empty kqueue
+    conf_file               config_file(file_name);
+    std::vector<t_server>   configs = config_file.get_configs();
+    server                  serverNetwork[configs.size()];
+
     if ((kq = kqueue()) == -1)
         TERMINATE("failed to create empty kqueue");
 
 	start_timestamp_network = get_current_timestamp();
 
-	server serverOne(40, 10, start_timestamp_network);
-	serverOne.cache_file("views/index.html", "/");
-    serverOne.cache_file("views/about.html", "/about");
-    serverOne.cache_file("views/error.html", "/error");
-	servers.insert(std::pair<int,server>(serverOne.getServerSocketFd(), serverOne));
-
-	server serverTwo(80, 10, start_timestamp_network);
-	serverTwo.cache_file("views/index.html", "/");
-    serverTwo.cache_file("views/about.html", "/about");
-    serverTwo.cache_file("views/error.html", "/error");
-	servers.insert(std::pair<int,server>(serverTwo.getServerSocketFd(), serverTwo));
+    for (size_t i = 0; i < configs.size(); i++)
+    {
+	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network);
+        for (size_t j = 0; j < configs[i].locations.size(); j++)
+	        serverNetwork[i].cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route);
+	    servers.insert(std::pair<int,server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
+    }
 }
 
 /*

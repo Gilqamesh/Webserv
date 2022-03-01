@@ -18,9 +18,12 @@ void server::initialize_constants(void)
     http_version = "HTTP/1.1";
 }
 
-server::server(int port, int backlog, unsigned long timestamp)
-    : server_socket_fd(-1), server_port(port), server_backlog(backlog), start_timestamp(timestamp)
+void    server::construct(int port, int backlog, unsigned long timestamp)
 {
+    server_socket_fd = -1;
+    server_port = port;
+    server_backlog = backlog;
+    start_timestamp = timestamp;
 	initialize_constants();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
