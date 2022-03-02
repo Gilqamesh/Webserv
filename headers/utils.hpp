@@ -14,4 +14,6 @@ bool match_pattern(const std::string &str, const std::string &pattern);
 
 unsigned long get_current_timestamp(void);
 
+std::string to_upper(const std::string &str);
+
 #endif

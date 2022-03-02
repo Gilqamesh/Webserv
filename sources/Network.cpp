@@ -15,10 +15,10 @@ void Network::initNetwork(char *file_name)
 
     for (size_t i = 0; i < configs.size(); i++)
     {
-	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network);
+	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses);
         for (size_t j = 0; j < configs[i].locations.size(); j++)
 	        serverNetwork[i].cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route);
-	    servers.insert(std::pair<int,server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
+	    servers.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
     }
 }
 
@@ -53,6 +53,23 @@ void Network::runNetwork()
         for (int i = 0; i < nev; ++i)
         {
             int fd = static_cast<int>(evList[i].ident);
+            if (evList[i].udata != NULL) /* CGI socket */
+            {
+                assert(cgi_responses.count(*(int *)evList[i].udata) != 0);
+                if (sockets.count(cgi_responses[*(int *)evList[i].udata])) /* if we still have connection with the client send the response */
+                {
+                    std::string response;
+                    std::string tmp;
+                    while ((tmp = get_next_line(*(int *)evList[i].udata)).length())
+                        response += tmp;
+                    send(cgi_responses[*(int *)evList[i].udata], response.data(), response.length(), 0);
+                }
+                sockets.erase(cgi_responses[*(int *)evList[i].udata]);
+                servers[cgi_responses[*(int *)evList[i].udata]].cut_connection(kq, cgi_responses[*(int *)evList[i].udata], &event);
+                cgi_responses.erase(*(int *)evList[i].udata);
+                close(*(int *)evList[i].udata);
+                continue ;
+            }
 			for (std::map<int,server>::iterator it = servers.begin(); it != servers.end(); ++it)
 			{
 				if (fd == (*it).first)
@@ -71,6 +88,7 @@ void Network::runNetwork()
                 if (evList[i].flags & EV_EOF) /* client side shutdown */
                 {
                     servers[sockets[fd]].cut_connection(kq, fd, &event);
+                    sockets.erase(fd);
                     continue ;
                 }
                 /* update socket's timeout event */
@@ -83,6 +101,7 @@ void Network::runNetwork()
             {
 				servers[sockets[fd]].send_timeout(fd); /* 408 Request Timeout */
                 servers[sockets[fd]].cut_connection(kq, fd, &event);
+                sockets.erase(fd);
             }
 			accepted = false;
         }

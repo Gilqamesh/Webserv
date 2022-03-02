@@ -2,7 +2,9 @@
 #include "utils.hpp"
 #include <errno.h>
 
-int main(void)
+#define BUFFER_SIZE 10000
+
+int main(int argc, char **argv)
 {
     /* TEST match_pattern */
     // LOG(match_pattern("hello", "hello"));
@@ -73,4 +75,31 @@ int main(void)
 
     // printf("%s\n",buffer );
     // return 0;
+
+    // TEST getcwd
+    // LOG(getcwd(NULL, 0));
+
+    // TEST to_upper
+    // LOG(to_upper("a8c&sLSdoA_SD2dfc ;a"));
+
+    // TEST replace
+    // std::string str("-asd_-daslads924-3-9fds8_");
+    // std::replace(str.begin(), str.end(), '-', '_');
+    // LOG(str);
+
+    // TEST CGI script
+    // if (argc != 2)
+    //     TERMINATE("usage: ./<app_name> <file_to_serve>");
+    (void)argc;
+    (void)argv;
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0, BUFFER_SIZE);
+    int fd;
+    if ((fd = open("index.html", O_RDONLY)) == -1)
+        TERMINATE("open failed in 'test' script");
+    read(fd, buffer, BUFFER_SIZE - 1);
+    close(fd);
+    std::string response(buffer);
+    write(STDOUT_FILENO, response.data(), response.length());
+    LOG_E("script has finished executing");
 }

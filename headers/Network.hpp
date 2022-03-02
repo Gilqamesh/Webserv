@@ -29,9 +29,10 @@ class Network
 		unsigned long	start_timestamp_network;
 
 	private:
-		std::map<int,server>	servers; // server_socket_fd - server
-		std::map<int,int>		sockets; // socket - server_socket_fd
-		
+		std::map<int, server>		servers; // server_socket_fd - server
+		std::map<int, int>			sockets; // socket - server_socket_fd
+		std::map<int, int>			cgi_responses; /* cgi socket -> client socket */
+
 		Network(Network const &Network);
 		Network &operator=(Network const &Network);
 };

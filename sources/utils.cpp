@@ -219,3 +219,15 @@ unsigned long get_current_timestamp(void)
         TERMINATE("gettimeofday failed");
     return (cur.tv_sec * 1000000 + cur.tv_usec);
 }
+
+/* Returns 'str' where each alpha char is upper-cased
+* Only with ASCII
+*/
+std::string to_upper(const std::string &str)
+{
+    std::string res;
+
+    for (std::string::const_iterator cit = str.begin(); cit != str.end(); ++cit)
+        res.push_back(::toupper(*cit));
+    return (res);
+}

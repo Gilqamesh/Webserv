@@ -2,8 +2,8 @@ name = webserv
 compile_flags = -Wall -Wextra -Werror -std=c++98
 link_flags =
 compiler = clang++
-server_files = Network.cpp server.cpp utils.cpp http_request.cpp http_response.cpp resource.cpp conf_file.cpp
-server_headers = header.hpp http_request.hpp server.hpp utils.hpp http_response.hpp resource.hpp conf_file.hpp
+server_files = Network.cpp server.cpp utils.cpp http_request.cpp http_response.cpp resource.cpp conf_file.cpp CGI.cpp
+server_headers = Network.hpp header.hpp http_request.hpp server.hpp utils.hpp http_response.hpp resource.hpp conf_file.hpp CGI.hpp
 header_directory = headers
 source_directory = sources
 object_directory = objects

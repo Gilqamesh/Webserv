@@ -11,6 +11,7 @@
 # include "http_request.hpp"
 # include "http_response.hpp"
 # include "resource.hpp"
+# include "CGI.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -30,30 +31,32 @@ private:
     int                                             server_socket_fd;
     int                                             server_port;
     int                                             server_backlog; /* server_socket_fd - backlog */
-	std::set<int>                                   connected_sockets_set; /* socket */
-    std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
+    std::map<std::string, resource>                 cached_resources; /* route - resource */
+    std::map<int, int>                              *cgi_responses; /* cgi socket - client socket */
+    // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
     /* constants */
-    std::unordered_set<std::string>                 accepted_request_methods;
-    std::unordered_set<char>                        header_whitespace_characters;
+    std::set<std::string>                           accepted_request_methods;
+    std::set<char>                                  header_whitespace_characters;
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
+    std::string                                     hostname; /* ipv4 */
+    int                                             current_number_of_connections;
 public:
     server();
+    server(const server &other);
+    server &operator=(const server &other);
     ~server();
 
-    void            construct(int port, int backlog, unsigned long timestamp);
-    void 			server_listen(void);
-    void 			cache_file(const std::string &path, const std::string &route);
+    void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses);
+    void 			cache_file(const std::string &path, const std::string &route, bool is_static = true);
+    void            add_resource(const resource &resource);
     int const       &getServerSocketFd(void) const;
     int             accept_connection(int kq, int socket, struct kevent *event);
     void            cut_connection(int kq, int socket, struct kevent *event);
     void            handle_connection(int kq, int socket, struct kevent *event);
     void            send_timeout(int socket); /* Send response: 408 Request Timeout */
 
-    server(const server& other);
-    server &operator=(const server& other);
 private:
-
     http_request    parse_request_header(int socket);
     void            router(int socket, const http_response &response);
 
@@ -68,7 +71,7 @@ private:
     void            request_control_TE(http_request &request);
 
     /* format http response and its control functions */
-    http_response   format_http_response(const http_request& request);
+    http_response   format_http_response(const http_request& request, int kq, struct kevent *event);
     void            response_control_handle_age(http_response &response);
     void            response_control_cache_control(http_response &response);
     void            response_control_expires(http_response &response);
@@ -83,6 +86,7 @@ private:
     void            payload_header_fields(const http_request &request, http_response &response);
 
     void            initialize_constants(void); // helper
+    void            add_script_meta_variables(CGI &script, const http_request &request);
 };
 
 #endif

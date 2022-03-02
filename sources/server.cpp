@@ -18,12 +18,13 @@ void server::initialize_constants(void)
     http_version = "HTTP/1.1";
 }
 
-void    server::construct(int port, int backlog, unsigned long timestamp)
+void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses)
 {
     server_socket_fd = -1;
     server_port = port;
     server_backlog = backlog;
     start_timestamp = timestamp;
+    cgi_responses = cgiResponses;
 	initialize_constants();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
@@ -58,6 +59,11 @@ void    server::construct(int port, int backlog, unsigned long timestamp)
     if (bind(server_socket_fd, reinterpret_cast<struct sockaddr *>(&address), sizeof(address)) == -1)
         TERMINATE("failed to bind the socket");
 
+    /* Retrieving client information */
+    char buffer[100];
+    inet_ntop(AF_INET, &address.sin_addr, buffer, INET_ADDRSTRLEN);
+    hostname = buffer;
+
     /* wait/listen for connection
     * listen(socket, backlog)
     *   the backlog defines the maximum number of pending connections that can be queued up
@@ -66,22 +72,46 @@ void    server::construct(int port, int backlog, unsigned long timestamp)
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
-    connected_sockets_set.insert(server_socket_fd);
+}
+
+server::server() { }
+
+server::server(server const &other) { *this = other; }
+
+server &server::operator=(const server& other)
+{
+	if (this != &other)
+	{
+		this->server_socket_fd = other.server_socket_fd;
+		this->server_port = other.server_port;
+		this->server_backlog = other.server_backlog;
+		this->cached_resources = other.cached_resources;
+		this->accepted_request_methods = other.accepted_request_methods;
+		this->header_whitespace_characters = other.header_whitespace_characters;
+		this->http_version = other.http_version;
+		this->start_timestamp = other.start_timestamp;
+        this->cgi_responses = other.cgi_responses;
+        this->hostname = other.hostname;
+        this->current_number_of_connections = other.current_number_of_connections;
+	}
+	return *this;
 }
 
 server::~server()
 {
-	// while (connected_sockets_set.size())
-    //     cut_connection(*(connected_sockets_set.begin()));
+    //ToDo cut connection for ..._map
 }
 
 /*
+* server::add_resource() should be used in the future for this purpose
+*
 * load a file from 'path' to match a specific 'route' (URL)
 * NEED: content-type for resource
 * NEED: allowed_methods coming from config file
+* NEED: specify if resource is served statically or dynamically, in which case script_path also needs to be provided
 * OPTIONAL: content-encoding, content_language, content-location
 */
-void server::cache_file(const std::string &path, const std::string &route)
+void server::cache_file(const std::string &path, const std::string &route, bool is_static)
 {
     if (cached_resources.count(route))
     {
@@ -99,7 +129,7 @@ void server::cache_file(const std::string &path, const std::string &route)
     while (getline(ifs, tmp))
         content += tmp;
     resource res;
-    res.target = path;
+    res.target = route;
     res.content = content;
     /* for now hard-coded, but this needs to be whatever the file's type is */
     res.content_type = "text/html";
@@ -108,7 +138,16 @@ void server::cache_file(const std::string &path, const std::string &route)
     /* for now hard-coded */
     res.allowed_methods.insert("GET");
     res.allowed_methods.insert("HEAD");
-    cached_resources[route] = res;
+    /* for now hard-coded */
+    res.is_static = is_static;
+    /* if resource is dynamic, this also has to be provided */
+    // res.script_path = ...;
+    add_resource(res);
+}
+
+void server::add_resource(const resource &resource)
+{
+    cached_resources[resource.target] = resource;
 }
 
 /*
@@ -117,10 +156,9 @@ void server::cache_file(const std::string &path, const std::string &route)
 */
 int server::accept_connection(int kq, int socket, struct kevent *event)
 {
-    /* do not accept connection if the backlog is full */
-    // if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog[0]))
-    if (connected_sockets_set.size() >= static_cast<unsigned long>(server_backlog))
-        return -1;
+    if (current_number_of_connections == server_backlog)
+        return (-1);
+    ++current_number_of_connections;
     struct sockaddr_storage addr;
     socklen_t socklen = sizeof(addr);
     int new_socket = accept(socket, (struct sockaddr *)&addr, &socklen);
@@ -144,7 +182,6 @@ int server::accept_connection(int kq, int socket, struct kevent *event)
     */
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("fcntl failed");
-	connected_sockets_set.insert(new_socket);
     // connected_sockets_map.insert(std::pair<int,int>(socket, new_socket));
     // identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
 
@@ -163,6 +200,8 @@ int server::accept_connection(int kq, int socket, struct kevent *event)
 */
 void server::cut_connection(int kq, int socket, struct kevent *event)
 {
+    assert(current_number_of_connections > 0);
+    --current_number_of_connections;
     /* close socket after we are done communicating */
     // bool serverDisconnected = false;
     close(socket);
@@ -173,8 +212,6 @@ void server::cut_connection(int kq, int socket, struct kevent *event)
     EV_SET(event, socket, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
     kevent(kq, event, 1, NULL, 0, NULL);
 
-    connected_sockets_set.erase(socket);
-
     if (socket == server_socket_fd)
         LOG_TIME("Server disconnected on socket: " << socket);
     else
@@ -184,29 +221,43 @@ void server::cut_connection(int kq, int socket, struct kevent *event)
 /* handle the ready to read/write socket
 * 1. Parse request (without body currently)
 * 2. Format response
-* 3. Send response to 'router'
+* 3. Send response to 'router' or respond later
 * 4. After responding close connection if needed
 */
 void server::handle_connection(int kq, int socket, struct kevent *event)
 {
-    http_request request_message = parse_request_header(socket);
-    format_http_request(request_message);
-    http_response response = format_http_response(request_message);
-    router(socket, response);
-    if (request_message.reject == true)
+    http_request request = parse_request_header(socket);
+
+    struct sockaddr addr;
+    socklen_t socklen;
+    /* Retrieving client information */
+    char buffer[100];
+    getsockname(socket, &addr, &socklen);
+    inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, buffer, INET_ADDRSTRLEN);
+    request.hostname = buffer;
+    request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
+
+    format_http_request(request);
+    http_response response = format_http_response(request, kq, event);
+    if (response.reject == false)
+        router(socket, response);
+    if (request.reject == true)
         cut_connection(kq, socket, event);
 }
 
-/* Message format (RFC7230/3.) -- CURRENTLY FOR REQUEST ONLY
+/* Request format (RFC7230/3.)
 * Fills in http_request object and returns it
 * 1. start-line (request-line for request, status-line for response)
 * 2. *( header-field CRLF)
 * 3. CRLF
-* 4. optional message-body/payload (not implemented -- RFC7230/3.3.)
+* 4. optional request-body/payload
+*
+* Construct absolute URI RFC2396/3.
 */
 http_request server::parse_request_header(int socket)
 {
-    http_request message(false);
+    http_request request(false);
+    request.socket = socket;
     /* Read and store request line
     * syntax checking for the request line happens here (RFC7230/3.1.1.)
     */
@@ -215,22 +266,23 @@ http_request server::parse_request_header(int socket)
         current_line = get_next_line(socket);
     if (match_pattern(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
         return (http_request::reject_http_request()); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
-    message.method_token = current_line.substr(0, current_line.find_first_of(' '));
-    message.target = current_line.substr(message.method_token.size() + 1);
-    message.target = message.target.substr(0, message.target.find_first_of(' '));
-    message.protocol_version = current_line.substr(message.method_token.size() + message.target.size() + 2);
-    message.protocol_version = message.protocol_version.substr(0, message.protocol_version.find_first_of(CRLF));
+    request.scheme = "http";
+    request.method_token = current_line.substr(0, current_line.find_first_of(' '));
+    request.target = current_line.substr(request.method_token.size() + 1);
+    request.target = request.target.substr(0, request.target.find_first_of(' '));
+    request.protocol_version = current_line.substr(request.method_token.size() + request.target.size() + 2);
+    request.protocol_version = request.protocol_version.substr(0, request.protocol_version.find_first_of(CRLF));
 
-    // LOG("Method token: '" << message.method_token << "'");
-    // LOG("Target: '" << message.target << "'");
-    // LOG("Protocol version: '" << message.protocol_version << "'");
+    // LOG("Method token: '" << request.method_token << "'");
+    // LOG("Target: '" << request.target << "'");
+    // LOG("Protocol version: '" << request.protocol_version << "'");
 
     bool first_header_field = true;
     /* Read and store header fields
     * store each key value pair in 'header_fields'
     * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
     * syntax checking for the header fields happens here
-    * if wrong syntax: server must reject the message, proxy should remove the wrongly formatted header field
+    * if wrong syntax: server must reject the request, proxy should remove the wrongly formatted header field
     * bad (BWS) and optional whitespaces (OWS) are getting removed here
     */
     /* Header field format (RFC7230/3.2.)
@@ -249,21 +301,36 @@ http_request server::parse_request_header(int socket)
         if (match_pattern(current_line, HEADER_FIELD_PATTERN) == false)
             return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
         std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
+        if (field_name == "Host" && request.header_fields.count(field_name))
+            return (http_request::reject_http_request()); /* RFC7230/5.4. */
         std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
         std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
-        if (message.header_fields.count(field_name)) /* append field-name with a preceding comma */
-            message.header_fields[field_name] += "," + field_value;
+        if (request.header_fields.count(field_name)) /* append field-name with a preceding comma */
+            request.header_fields[field_name] += "," + field_value;
         else
-            message.header_fields[field_name] = field_value;
+            request.header_fields[field_name] = field_value;
     }
+    if (request.header_fields.count("Host") == 0)
+        return (http_request::reject_http_request());
+    request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
+    request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
+    if (request.target.find_first_of('?') != std::string::npos)
+        request.query = request.target.substr(request.target.find_first_of('?') + 1);
+    request.URI = request.scheme + ":" + request.net_path;
+    if (request.query.length())
+        request.URI += "?" + request.query;
+    // LOG("Abs path: " << request.abs_path);
+    // LOG("Net path: " << request.net_path);
+    // LOG("Query: " << request.query);
+    // LOG("URI: " << request.URI);
     while ((current_line = get_next_line(socket)).size())
-        message.payload += current_line;
-    return (message);
+        request.payload += current_line;
+    // LOG("Payload: " << request.payload);
+    return (request);
 }
 
 /*
-* Handle request header fields here
-* RFC7231/5.1.
+* Handle request header fields here RFC7231/5.1.
 */
 void server::format_http_request(http_request& request)
 {
@@ -346,8 +413,10 @@ void            server::request_control_TE(http_request &request)
 *   1.3. Reason Phrase
 * 2. Construct Header Fields using Control Data RFC7231/7.1.
 * 3. Construct Message Body
+*       either server static resource
+*       or execute script with CGI to serve dynamically constructed resource
 */
-http_response server::format_http_response(const http_request& request)
+http_response server::format_http_response(const http_request& request, int kq, struct kevent *event)
 {
     http_response response;
     response.http_version = http_version;
@@ -396,6 +465,36 @@ http_response server::format_http_response(const http_request& request)
     payload_header_fields(request, response);
 
     /* add payload */
+    if (match_pattern(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
+    {
+        /* NEED: execute the corresponding script with CGI
+        * 1. pass meta_variables as environment variables to the script
+        * 2. fork and execute script
+        * 3. retrieve output at some point somehow
+        *   we can probably set up a socket which is inherited to the script - which will
+        *   be the communication between server and the CGI - and then add an event for it
+        *   so that it can be later retrieved from the event queue,
+        *   after which we can respond to the client.. if the event passes a certain timeout,
+        *   kill the process and handle client accordingly
+        */
+        int cgi_pipe[2];
+        if (pipe(cgi_pipe) == -1)
+            TERMINATE("pipe failed");
+        if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        /* write request payload into socket */
+        (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+        CGI script(cgi_pipe, request.payload);
+        add_script_meta_variables(script, request);
+        script.execute();
+        close(cgi_pipe[WRITE_END]);
+        /* register an event for this socket */
+        EV_SET(event, cgi_pipe[READ_END], EVFILT_READ, EV_ADD, 0, 0, (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
+        kevent(kq, event, 1, NULL, 0, NULL);
+        return (http_response::reject_http_response());
+    }
     if (match_pattern(response.status_code, "2..") == true)
     {
         if (response.header_fields.count("Content-Length"))
@@ -537,24 +636,40 @@ void server::send_timeout(int socket)
     router(socket, response);
 }
 
-server::server() {}
-server::server(server const &other) {*this = other;}
-server &server::operator=(const server& other)
-{
-	if (this != &other)
-	{
-		this->server_socket_fd = other.server_socket_fd;
-		this->server_port = other.server_port;
-		this->server_backlog = other.server_backlog;
-		this->connected_sockets_set = other.connected_sockets_set;
-		this->cached_resources = other.cached_resources;
-		this->accepted_request_methods = other.accepted_request_methods;
-		this->header_whitespace_characters = other.header_whitespace_characters;
-		this->http_version = other.http_version;
-		this->start_timestamp = other.start_timestamp;
-	}
-	return *this;
-}
-
-
 int const       &server::getServerSocketFd(void) const {return this->server_socket_fd;}
+/* Add request meta-variables to the script RFC3875/4.1. */
+void server::add_script_meta_variables(CGI &script, const http_request &request)
+{
+    // script.add_meta_variable("AUTH_TYPE", "");
+    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
+    if (request.header_fields.count("Content-Type"))
+        script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
+    script.add_meta_variable("PATH_INFO", request.abs_path);
+    char *cwd;
+    if ((cwd = getcwd(NULL, 0)) == NULL)
+        TERMINATE("getcwd failed in 'add_script_meta_variables'");
+    /* This should be handled from the calling server */
+    script.add_meta_variable("PATH_TRANSLATED", cwd + request.abs_path);
+    script.add_meta_variable("QUERY_STRING", request.query);
+    script.add_meta_variable("REMOTE_ADDR", request.hostname);
+    script.add_meta_variable("REMOTE_HOST", request.hostname);
+    /* if AUTH_TYPE is set then
+    * script.add_meta_variable("REQUEST_USER", "");
+    */
+    script.add_meta_variable("REQUEST_METHOD", request.method_token);
+    script.add_meta_variable("SCRIPT_NAME", request.abs_path);
+    script.add_meta_variable("SERVER_NAME", this->hostname);
+    script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
+    script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
+    /* name/version of the server, no clue what this means currently.. */
+    // script.add_meta_variable("SERVER_SOFTWARE", "");
+    for (std::unordered_map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)
+    {
+        if (cit->first == "Authorization" || cit->first == "Content-Length" || cit->first == "Content-Type"
+            || cit->first == "Connection")
+            continue ;
+        std::string key = "HTTP_" + to_upper(cit->first);
+        std::replace(key.begin(), key.end(), '-', '_');
+        script.add_meta_variable(key, cit->second);
+    }
+}

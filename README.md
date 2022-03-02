@@ -31,4 +31,8 @@ https://www.digitalocean.com/community/tutorials/understanding-nginx-server-and-
 
 client_max_body_size: https://linuxhint.com/what-is-client-max-body-size-nginx/ || https://stackoverflow.com/questions/5840148/how-can-i-get-a-files-size-in-c || https://stackoverflow.com/questions/10634629/what-are-the-usage-differences-between-size-t-and-off-t
 
+Uniform Resource Identifiers (URI) rfc: https://datatracker.ietf.org/doc/html/rfc2396
 
+Common Gateway Interface (CGI) rfc: https://datatracker.ietf.org/doc/html/rfc3875
+
+Domain Names rfc: https://datatracker.ietf.org/doc/html/rfc1034
