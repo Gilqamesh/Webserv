@@ -36,18 +36,15 @@ private:
     std::multimap<int,int>                          connected_sockets_map;  // server_socket_fd - sockets
     std::map<int,int>                               identifyServerSocket; // to identify to which server_socket_fd the new_socket belongs to
     std::unordered_map<std::string, resource>       cached_resources; /* route - resource */
-<<<<<<< HEAD
     std::set<int>                                   connected_sockets_set; /* socket */
     std::unordered_map<int, int>                    cgi_responses; /* cgi socket - client socket */
     // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
-=======
->>>>>>> 9b2bfd30f42b092a2d5d1efbfa97f2a765dcc302
     /* constants */
     std::unordered_set<std::string>                 accepted_request_methods;
     std::unordered_set<char>                        header_whitespace_characters;
     std::string                                     http_version;
     unsigned long                                   start_timestamp;
-    std::string                                     hostname; /* ipv4 */
+    std::vector<std::string>                        hostname; /* ipv4 */
 public:
     server();
     server(int port, int backlog);

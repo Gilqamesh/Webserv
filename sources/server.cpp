@@ -79,12 +79,12 @@ server::server()
         address[i].sin_port = htons(server_port[i]);
         if (bind(server_socket_fd[i], reinterpret_cast<struct sockaddr *>(&address[i]), sizeof(address[i])) == -1)
             TERMINATE("failed to bind the socket");
-    }
 
-    /* Retrieving client information */
-    char buffer[100];
-    inet_ntop(AF_INET, &address.sin_addr, buffer, INET_ADDRSTRLEN);
-    this->hostname = buffer;
+        /* Retrieving client information */
+        char buffer[100];
+        inet_ntop(AF_INET, &address[i].sin_addr, buffer, INET_ADDRSTRLEN);
+        hostname.push_back(buffer);
+    }
 
     /* wait/listen for connection
     * listen(socket, backlog)
@@ -146,31 +146,30 @@ void server::server_listen(void)
         // returns number of events
         int nev = kevent(kq, NULL, 0, evList, MAX_EVENTS, NULL);
 
-        PRINT_HERE();
         for (int i = 0; i < nev; ++i)
         {
-            PRINT_HERE();
             int fd = static_cast<int>(evList[i].ident);
-<<<<<<< HEAD
             if (evList[i].udata != NULL) /* CGI socket */
             {
+                // if (cgi_responses.count(*(int *)evList[i].udata) == 0) /* if the server does not associate the file descriptor with a client socket */
+                // {
+                //     LOG(*(int *)evList[i].udata);
+                //     exit(1);
+                //     continue ;
+                // }
                 if (connected_sockets_set.count(cgi_responses[*(int *)evList[i].udata])) /* if we still have connection with the client send the response */
                 {
                     std::string response;
                     std::string tmp;
-                    PRINT_HERE();
                     while ((tmp = get_next_line(*(int *)evList[i].udata)).length())
                         response += tmp;
-                    PRINT_HERE();
-                    LOG("Response from CGI: " << response);
-                    exit(1);
                     send(cgi_responses[*(int *)evList[i].udata], response.data(), response.length(), 0);
                 }
-                cut_connection(*(int *)evList[i].udata);
+                cut_connection(cgi_responses[*(int *)evList[i].udata]);
+                cgi_responses.erase(*(int *)evList[i].udata);
+                close(*(int *)evList[i].udata);
                 continue ;
             }
-            if (fd == server_socket_fd)                 /* receive new connection */
-=======
             for (int j = 0; j < static_cast<int>(server_socket_fd.size()); ++j)
             {
                 if (fd == server_socket_fd[j])
@@ -180,7 +179,6 @@ void server::server_listen(void)
                 }
             }
             if (accepted == true)                 /* receive new connection */
->>>>>>> 9b2bfd30f42b092a2d5d1efbfa97f2a765dcc302
                 accept_connection(fd);
             else if (evList[i].filter == EVFILT_READ)   /* socket is ready to be read */
             {
@@ -232,7 +230,7 @@ void server::cache_file(const std::string &path, const std::string &route, bool 
     while (getline(ifs, tmp))
         content += tmp;
     resource res;
-    res.target = path;
+    res.target = route;
     res.content = content;
     /* for now hard-coded, but this needs to be whatever the file's type is */
     res.content_type = "text/html";
@@ -597,7 +595,7 @@ http_response server::format_http_response(const http_request& request)
     payload_header_fields(request, response);
 
     /* add payload */
-    if (cached_resources[request.target].is_static == false) /* if resource is dynamic */
+    if (match_pattern(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
     {
         /* NEED: execute the corresponding script with CGI
         * 1. pass meta_variables as environment variables to the script
@@ -614,6 +612,8 @@ http_response server::format_http_response(const http_request& request)
             TERMINATE("pipe failed");
         if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
             TERMINATE("fcntl failed");
+        if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
         /* write request payload into socket */
         cgi_responses[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
         CGI script(cgi_pipe, request.payload);
@@ -621,7 +621,7 @@ http_response server::format_http_response(const http_request& request)
         script.execute();
         close(cgi_pipe[WRITE_END]);
         /* register an event for this socket */
-        EV_SET(&event, cgi_pipe[READ_END], EVFILT_READ, EV_ADD , 0, 0, (int *)(&cgi_pipe[READ_END]));
+        EV_SET(&event, cgi_pipe[READ_END], EVFILT_READ, EV_ADD, 0, 0, (int *)&cgi_responses.find(cgi_pipe[READ_END])->first);
         kevent(kq, &event, 1, NULL, 0, NULL);
         return (http_response::reject_http_response());
     }
@@ -778,7 +778,7 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    script.add_meta_variable("PATH_TRANSLATED", cwd + std::string("/") + request.abs_path);
+    script.add_meta_variable("PATH_TRANSLATED", cwd + request.abs_path);
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);

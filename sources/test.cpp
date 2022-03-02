@@ -88,22 +88,18 @@ int main(int argc, char **argv)
     // LOG(str);
 
     // TEST CGI script
-    if (argc != 2)
-        TERMINATE("usage: ./<app_name> <file_to_serve>");
+    // if (argc != 2)
+    //     TERMINATE("usage: ./<app_name> <file_to_serve>");
+    (void)argc;
+    (void)argv;
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
     int fd;
-    if ((fd = open(argv[1], O_RDONLY)) == -1)
-        TERMINATE(("open failed" + std::string(argv[1])).c_str());
-    read(fd, buffer, BUFFER_SIZE - 1);
-    close(fd);
     if ((fd = open("index.html", O_RDONLY)) == -1)
-        TERMINATE("open failed");
-    std::string response(buffer);
-    memset(buffer, 0, BUFFER_SIZE);
+        TERMINATE("open failed in 'test' script");
     read(fd, buffer, BUFFER_SIZE - 1);
-    response += buffer;
     close(fd);
+    std::string response(buffer);
     write(STDOUT_FILENO, response.data(), response.length());
     LOG_E("script has finished executing");
 }

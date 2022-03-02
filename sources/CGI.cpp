@@ -45,8 +45,11 @@ void CGI::execute(void)
         std::vector<char *> env;
         for (std::unordered_map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
         {
-            char *tmp = (char *)std::malloc(it->second.length() + 1);
-            tmp[it->second.length()] = '\0';
+            char *tmp = (char *)std::malloc(it->first.length() + it->second.length() + 2); /* 1 for =, 1 for \0 */
+            tmp[it->first.length() + it->second.length() + 1] = '\0';
+            memcpy(tmp, it->first.c_str(), it->first.length());
+            tmp[it->first.length()] = '=';
+            memcpy(tmp + it->first.length() + 1, it->second.c_str(), it->second.length());
             env.push_back(tmp);
         }
         env.push_back(NULL);
