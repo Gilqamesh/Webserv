@@ -18,13 +18,14 @@ void server::initialize_constants(void)
     http_version = "HTTP/1.1";
 }
 
-void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses)
+void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *eventQueue)
 {
     server_socket_fd = -1;
     server_port = port;
     server_backlog = backlog;
     start_timestamp = timestamp;
     cgi_responses = cgiResponses;
+    events = eventQueue;
 	initialize_constants();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
@@ -36,7 +37,6 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
     if (server_socket_fd == -1)
         TERMINATE("failed to create a socket");
     
-
     /* set socket opt
     * SO_REUSEADDR allows us to reuse the specific port even if that port is busy
     */
@@ -72,34 +72,6 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     LOG("Server listens on port: " << server_port);
-}
-
-server::server() { }
-
-server::server(server const &other) { *this = other; }
-
-server &server::operator=(const server& other)
-{
-	if (this != &other)
-	{
-		this->server_socket_fd = other.server_socket_fd;
-		this->server_port = other.server_port;
-		this->server_backlog = other.server_backlog;
-		this->cached_resources = other.cached_resources;
-		this->accepted_request_methods = other.accepted_request_methods;
-		this->header_whitespace_characters = other.header_whitespace_characters;
-		this->http_version = other.http_version;
-		this->start_timestamp = other.start_timestamp;
-        this->cgi_responses = other.cgi_responses;
-        this->hostname = other.hostname;
-        this->current_number_of_connections = other.current_number_of_connections;
-	}
-	return *this;
-}
-
-server::~server()
-{
-    //ToDo cut connection for ..._map
 }
 
 /*
@@ -154,34 +126,31 @@ void server::add_resource(const resource &resource)
 * accept and store the new connection from the server socket
 * adds current timestamp upon successful connection
 */
-int server::accept_connection(int kq, int socket, struct kevent *event)
+int server::accept_connection(void)
 {
     if (current_number_of_connections == server_backlog)
         return (-1);
     ++current_number_of_connections;
     struct sockaddr_storage addr;
     socklen_t socklen = sizeof(addr);
-    int new_socket = accept(socket, (struct sockaddr *)&addr, &socklen);
+    int new_socket = accept(server_socket_fd, (struct sockaddr *)&addr, &socklen);
     if (new_socket == -1)
-        TERMINATE("accept failed");
+        TERMINATE("'accept' failed");
 
     /* register event for reading on socket */
-    EV_SET(event, new_socket, EVFILT_READ, EV_ADD, 0, 0, NULL);
-    kevent(kq, event, 1, NULL, 0, NULL);
+    events->addReadEvent(new_socket);
 
 	/* register timeout for the socket
     * the idea with this is that this event will be updated on incoming requests
     * so it only triggers if there wasn't a request for the specified time
     */
-    EV_SET(event, new_socket, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, TIMEOUT_TO_CUT_CONNECTION * 1000, NULL);
-    kevent(kq, event, 1, NULL, 0, NULL);
-
+    events->addTimeEvent(new_socket, TIMEOUT_TO_CUT_CONNECTION * 1000);
     /* turn on non-blocking behavior for this file descriptor
     * any function that would be blocking with this file descriptor will instead not block
     * and return with -1 with errno set to EWOULDBLOCK
     */
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
-        TERMINATE("fcntl failed");
+        TERMINATE("'fcntl' failed");
     // connected_sockets_map.insert(std::pair<int,int>(socket, new_socket));
     // identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
 
@@ -198,19 +167,14 @@ int server::accept_connection(int kq, int socket, struct kevent *event)
 // *       or until we are reasonably certain that the client has received the server's last response
 // *   lastly, fully close the connection
 */
-void server::cut_connection(int kq, int socket, struct kevent *event)
+void server::cut_connection(int socket)
 {
     assert(current_number_of_connections > 0);
     --current_number_of_connections;
     /* close socket after we are done communicating */
-    // bool serverDisconnected = false;
+    events->removeReadEvent(socket);
+    events->removeTimeEvent(socket);
     close(socket);
-    // EV_SET(kev, ident,	filter,	flags, fflags, data, udata);
-    // Socket is automatically removed from the kq by the kernel.
-    EV_SET(event, socket, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    kevent(kq, event, 1, NULL, 0, NULL);
-    EV_SET(event, socket, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
-    kevent(kq, event, 1, NULL, 0, NULL);
 
     if (socket == server_socket_fd)
         LOG_TIME("Server disconnected on socket: " << socket);
@@ -224,7 +188,7 @@ void server::cut_connection(int kq, int socket, struct kevent *event)
 * 3. Send response to 'router' or respond later
 * 4. After responding close connection if needed
 */
-void server::handle_connection(int kq, int socket, struct kevent *event)
+void server::handle_connection(int socket)
 {
     http_request request = parse_request_header(socket);
 
@@ -238,11 +202,11 @@ void server::handle_connection(int kq, int socket, struct kevent *event)
     request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
 
     format_http_request(request);
-    http_response response = format_http_response(request, kq, event);
+    http_response response = format_http_response(request);
     if (response.reject == false)
         router(socket, response);
     if (request.reject == true)
-        cut_connection(kq, socket, event);
+        cut_connection(socket);
 }
 
 /* Request format (RFC7230/3.)
@@ -416,7 +380,7 @@ void            server::request_control_TE(http_request &request)
 *       either server static resource
 *       or execute script with CGI to serve dynamically constructed resource
 */
-http_response server::format_http_response(const http_request& request, int kq, struct kevent *event)
+http_response server::format_http_response(const http_request& request)
 {
     http_response response;
     response.http_version = http_version;
@@ -491,8 +455,7 @@ http_response server::format_http_response(const http_request& request, int kq, 
         script.execute();
         close(cgi_pipe[WRITE_END]);
         /* register an event for this socket */
-        EV_SET(event, cgi_pipe[READ_END], EVFILT_READ, EV_ADD, 0, 0, (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
-        kevent(kq, event, 1, NULL, 0, NULL);
+        events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
         return (http_response::reject_http_response());
     }
     if (match_pattern(response.status_code, "2..") == true)

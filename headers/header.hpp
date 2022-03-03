@@ -18,6 +18,10 @@
 # include <csignal>         // to close server socket if process is signalled
 # include <fcntl.h>         // fcntl
 
+# include <sys/types.h> // kqueue, kevent
+# include <sys/event.h>
+# include <sys/time.h>
+
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
 # define LOG_TIME(x) (std::cout << x << " time: " << (get_current_timestamp() - start_timestamp) / 1000000.0 << " seconds" << std::endl)

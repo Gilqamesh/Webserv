@@ -41,19 +41,16 @@ private:
     unsigned long                                   start_timestamp;
     std::string                                     hostname; /* ipv4 */
     int                                             current_number_of_connections;
+    EventHandler                                    *events;
 public:
-    server();
-    server(const server &other);
-    server &operator=(const server &other);
-    ~server();
 
-    void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses);
+    void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events);
     void 			cache_file(const std::string &path, const std::string &route, bool is_static = true);
     void            add_resource(const resource &resource);
     int const       &getServerSocketFd(void) const;
-    int             accept_connection(int kq, int socket, struct kevent *event);
-    void            cut_connection(int kq, int socket, struct kevent *event);
-    void            handle_connection(int kq, int socket, struct kevent *event);
+    int             accept_connection(void);
+    void            cut_connection(int socket);
+    void            handle_connection(int socket);
     void            send_timeout(int socket); /* Send response: 408 Request Timeout */
 
 private:
@@ -71,7 +68,7 @@ private:
     void            request_control_TE(http_request &request);
 
     /* format http response and its control functions */
-    http_response   format_http_response(const http_request& request, int kq, struct kevent *event);
+    http_response   format_http_response(const http_request& request);
     void            response_control_handle_age(http_response &response);
     void            response_control_cache_control(http_response &response);
     void            response_control_expires(http_response &response);
