@@ -21,6 +21,7 @@ void server::initialize_constants(void)
 void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *eventQueue)
 {
     server_socket_fd = -1;
+    current_number_of_connections = 0;
     server_port = port;
     server_backlog = backlog;
     start_timestamp = timestamp;
