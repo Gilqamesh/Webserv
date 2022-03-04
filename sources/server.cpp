@@ -599,7 +599,6 @@ void server::send_timeout(int socket)
     router(socket, response);
 }
 
-int const       &server::getServerSocketFd(void) const {return this->server_socket_fd;}
 /* Add request meta-variables to the script RFC3875/4.1. */
 void server::add_script_meta_variables(CGI &script, const http_request &request)
 {

@@ -47,7 +47,7 @@ public:
     void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events);
     void 			cache_file(const std::string &path, const std::string &route, bool is_static = true);
     void            add_resource(const resource &resource);
-    int const       &getServerSocketFd(void) const;
+    inline int      getServerSocketFd(void) const { return (server_socket_fd); }
     int             accept_connection(void);
     void            cut_connection(int socket);
     void            handle_connection(int socket);
