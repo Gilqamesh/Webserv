@@ -17,6 +17,10 @@
 # include <sys/event.h>
 # include <sys/time.h>
 
+#include <sys/stat.h> // check if file exists
+
+#include <ctime> // to get current time
+
 # define MAX_EVENTS 32 
 
 # define HEADER_WHITESPACES " \t"
@@ -84,6 +88,9 @@ private:
 
     void            initialize_constants(void); // helper
     void            add_script_meta_variables(CGI &script, const http_request &request);
+
+    void            displayTimestamp(void);
+    bool            fileExists(const std::string& file);
 };
 
 #endif

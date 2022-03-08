@@ -7,6 +7,7 @@
 struct resource
 {
     std::string                     target;
+    std::string                     path;
     /* Representation Metadata RFC7231/3.1. */
     std::string                     content_type;
     std::unordered_set<std::string> content_encoding;

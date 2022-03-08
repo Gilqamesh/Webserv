@@ -72,6 +72,8 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
     */
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
+    // LOG("Server listens on port: " << server_port);
+    server::displayTimestamp();
     LOG("Server listens on port: " << server_port);
 }
 
@@ -104,6 +106,7 @@ void server::cache_file(const std::string &path, const std::string &route, bool 
     resource res;
     res.target = route;
     res.content = content;
+    res.path = path;
     /* for now hard-coded, but this needs to be whatever the file's type is */
     res.content_type = "text/html";
     // /* for now hard-coded, but it needs to be the file path relative */
@@ -111,6 +114,7 @@ void server::cache_file(const std::string &path, const std::string &route, bool 
     /* for now hard-coded */
     res.allowed_methods.insert("GET");
     res.allowed_methods.insert("HEAD");
+    res.allowed_methods.insert("DELETE");
     /* for now hard-coded */
     res.is_static = is_static;
     /* if resource is dynamic, this also has to be provided */
@@ -155,7 +159,10 @@ int server::accept_connection(void)
     // connected_sockets_map.insert(std::pair<int,int>(socket, new_socket));
     // identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
 
-   LOG_TIME("Client joined from socket: " << new_socket);
+//    LOG_TIME("Client joined from socket: " << new_socket);
+    server::displayTimestamp();
+    LOG("Client joined from socket: " << new_socket);
+
    return new_socket;
 }
 
@@ -178,9 +185,17 @@ void server::cut_connection(int socket)
     close(socket);
 
     if (socket == server_socket_fd)
-        LOG_TIME("Server disconnected on socket: " << socket);
+    {
+        // LOG_TIME("Server disconnected on socket: " << socket);
+        server::displayTimestamp();
+        LOG("Server disconnected on socket: " << socket);
+    }
     else
-        LOG_TIME("Client disconnected on socket: " << socket);
+    {
+        // LOG_TIME("Client disconnected on socket: " << socket);
+        server::displayTimestamp();
+        LOG("Client disconnected on socket: " << socket);
+    }
 }
 
 /* handle the ready to read/write socket
@@ -291,6 +306,9 @@ http_request server::parse_request_header(int socket)
     while ((current_line = get_next_line(socket)).size())
         request.payload += current_line;
     // LOG("Payload: " << request.payload);
+
+    server::displayTimestamp();
+    LOG("REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
 }
 
@@ -409,11 +427,34 @@ http_response server::format_http_response(const http_request& request)
         * If no resources are created, respond with 200 that containts the result and a "Content-Location"
         *   header field that has the same value as the POST's effective request URI
         * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
-        */
-    } else { /* 200 */
+        */  
+    }else { /* 200 */
         response.status_code = "200";
         response.reason_phrase = "OK";
     }
+
+    if (request.method_token == "DELETE")
+    {      
+        if (fileExists(cached_resources[request.target].path))
+        {
+            if (std::remove(cached_resources[request.target].path.c_str()) == 0)
+            {
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+            }
+            else
+            {
+                response.status_code = "403";
+                response.reason_phrase = "Forbidden";
+            }
+        }
+        else
+        {
+            response.status_code = "404";
+            response.reason_phrase = "Not Found";
+        }
+    }
+
 
     /* Control Data RFC7231/7.1. */
     response_control_handle_age(response);
@@ -428,6 +469,9 @@ http_response server::format_http_response(const http_request& request)
     representation_metadata(request, response);
 
     payload_header_fields(request, response);
+
+    server::displayTimestamp();
+    LOG("RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
 
     /* add payload */
     if (match_pattern(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
@@ -459,10 +503,17 @@ http_response server::format_http_response(const http_request& request)
         events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
         return (http_response::reject_http_response());
     }
-    if (match_pattern(response.status_code, "2..") == true)
-    {
+    if (match_pattern(response.status_code, "2..") == true) {
         if (response.header_fields.count("Content-Length"))
-            response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
+        {
+            if (request.method_token == "DELETE")
+            {
+                response.header_fields["Content-Length"] = std::to_string(cached_resources["/successfulDelet"].content.length());
+                response.payload = cached_resources["/successfulDelet"].content;
+            }
+            else
+                response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
+        }
         else
             response.payload = cached_resources[request.target].content;
     }
@@ -549,7 +600,10 @@ void server::payload_header_fields(const http_request &request, http_response &r
 {
     if (match_pattern(response.status_code, "[45]..") == true)
     {
-        response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+        if (response.status_code == "403")
+            response.header_fields["Content-Length"] = std::to_string(cached_resources["/error403"].content.length());
+        else
+            response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
         return ;
     }
     if (response.header_fields.count("Transfer-Encoding") == 0) /* set up Content-Length */
@@ -635,4 +689,27 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
         std::replace(key.begin(), key.end(), '-', '_');
         script.add_meta_variable(key, cit->second);
     }
+}
+
+void	server::displayTimestamp(void)
+{
+	time_t		now = time(0);
+
+    tm *ltm = localtime(&now);
+    std::cout << "[";
+    if (ltm->tm_hour < 10)
+        std::cout << '0';
+    std::cout << ltm->tm_hour << ":";
+    if (ltm->tm_min < 10)
+        std::cout << '0';
+    std::cout << ltm->tm_min << ":";
+    if (ltm->tm_sec < 10)
+        std::cout << '0';
+	std::cout << ltm->tm_sec << "] ";
+}
+
+bool server::fileExists(const std::string& file)
+{
+    struct stat buf;
+    return (stat(file.c_str(), &buf) == 0);
 }
