@@ -14,7 +14,7 @@ void Network::initNetwork(char *file_name)
     {
 	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses, &events);
         for (size_t j = 0; j < configs[i].locations.size(); j++)
-	        serverNetwork[i].cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route);
+	        serverNetwork[i].cache_file(configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route, false);
 	    servers.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
     }
 }
@@ -36,7 +36,7 @@ void Network::runNetwork()
         for (int i = 0; i < nev; ++i)
         {
             int fd = events[i].ident;
-            if (events[i].udata != NULL) /* CGI socket */
+            if (events[i].udata != NULL) /* CGI fd */
             {
                 assert(cgi_responses.count(*(int *)events[i].udata) != 0);
                 if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
@@ -47,10 +47,10 @@ void Network::runNetwork()
                         response += tmp;
                     send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
                 }
+                /* cut connection with the client */
+                servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
                 /* remove client socket from 'sockets' */
                 sockets.erase(cgi_responses[*(int *)events[i].udata]);
-                /* cut connection with the client */
-                servers[cgi_responses[*(int *)events[i].udata]].cut_connection(cgi_responses[*(int *)events[i].udata]);
                 /*  */
                 cgi_responses.erase(*(int *)events[i].udata);
                 close(*(int *)events[i].udata);

@@ -113,7 +113,7 @@ void server::cache_file(const std::string &path, const std::string &route, bool 
     /* for now hard-coded */
     res.allowed_methods.insert("GET");
     res.allowed_methods.insert("HEAD");
-    // res.allowed_methods.insert("DELETE");
+    res.allowed_methods.insert("DELETE");
     /* for now hard-coded */
     res.is_static = is_static;
     /* if resource is dynamic, this also has to be provided */
