@@ -18,7 +18,8 @@ void server::initialize_constants(void)
     http_version = "HTTP/1.1";
 }
 
-void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *eventQueue)
+void    server::construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *eventQueue,
+const t_server &configuration)
 {
     server_socket_fd = -1;
     current_number_of_connections = 0;
@@ -27,6 +28,9 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
     start_timestamp = timestamp;
     cgi_responses = cgiResponses;
     events = eventQueue;
+    locations = configuration.locations;
+    for (unsigned int i = 0; i < locations.size(); ++i)
+        sortedRoutes[locations[i].route] = locations[i];
 	initialize_constants();
 
     /* creating a socket (domain/address family, type of service, specific protocol)
@@ -74,6 +78,8 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
         TERMINATE("listen failed");
     // LOG("Server listens on port: " << server_port);
     LOG(displayTimestamp() << " Server listens on port: " << server_port);
+
+    cache_file();
 }
 
 /*
@@ -85,11 +91,12 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
 * NEED: specify if resource is served statically or dynamically, in which case script_path also needs to be provided
 * OPTIONAL: content-encoding, content_language, content-location
 */
-void server::cache_file(const t_server &configuration/* const std::string &path, const std::string &route */)
+void server::cache_file()
 {
-    for (unsigned int i = 0; i < configuration.locations.size(); ++i)
+    
+    for (unsigned int i = 0; i < locations.size(); ++i)
     {
-        const t_location &cur_location = configuration.locations[i];
+        const t_location &cur_location = locations[i];
         if (cached_resources.count(cur_location.route))
         {
             WARN("route: '" << cur_location.route << "' already exists");
@@ -386,6 +393,34 @@ void            server::request_control_TE(http_request &request)
     (void)request;
 }
 
+/*
+* construct path and returns it if 'target' is under a directory that is set up to server from the
+* configuration file for this server
+*/
+std::string server::isAllowedDirectory(const std::string &target)
+{
+    for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
+    {
+        LOG("target.substr(locations[i].route.size()): " << target.substr(0, cit->first.size()));
+        LOG("locations[i].route: " << cit->first);
+        if (target.substr(0, cit->first.size()) == cit->first)
+        {
+            /* construct string */
+            std::string path = cit->second.root + "/";
+            path += target.substr(cit->first.size());
+            LOG("Constructed path: " << path);
+            /* remove route from the beginning of 'target'
+             * add root to the beginning of target
+            */
+
+            if (fileExists(path))
+                return (path);
+            else
+                return ("");
+        }
+    }
+    return ("");
+}
 
 /* Constructs http_response
 * 1. Construct Status Line
@@ -405,28 +440,24 @@ http_response server::format_http_response(const http_request& request)
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
-        response.status_code = "404";
-        response.reason_phrase = "Not Found";
-    } else if (accepted_request_methods.count(request.method_token) == 0) { /* Not Implemented */
-        response.status_code = "501";
-        response.reason_phrase = "Not Implemented";
+        if (isAllowedDirectory(request.target).size()) { /* check if directory is allowed and if the file exists */
+            response.status_code = "200";
+            response.reason_phrase = "OK";
+        }
+        else {
+            response.status_code = "404";
+            response.reason_phrase = "Not Found";
+        }
     } else if (cached_resources[request.target].allowed_methods.count(request.method_token) == 0) { /* Not Allowed */
         response.status_code = "405";
         response.reason_phrase = "Method Not Allowed";
         /* RFC7231/6.5.5. must generate Allow header field */
         for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].allowed_methods.begin(); cit != cached_resources[request.target].allowed_methods.end(); ++cit)
             response.header_fields["Allow"] += response.header_fields.count("Allow") ? "," + *cit : *cit;
-    } else if (request.method_token == "POST") { /* Target resource needs to process the request */
-        /* RFC7231/4.3.3.
-        * CGI for example comes here
-        * if one or more resources has been created, status code needs to be 201 with "Created"
-        *   with "Location" header field that provides an identifier for the primary resource created
-        *   and a representation that describes the status of the request while referring to the new resource(s).
-        * If no resources are created, respond with 200 that containts the result and a "Content-Location"
-        *   header field that has the same value as the POST's effective request URI
-        * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
-        */  
-    }else { /* 200 */
+    } else if (accepted_request_methods.count(request.method_token) == 0) { /* Not Implemented */
+        response.status_code = "501";
+        response.reason_phrase = "Not Implemented";
+    } else { /* 200 */
         response.status_code = "200";
         response.reason_phrase = "OK";
     }
@@ -451,7 +482,17 @@ http_response server::format_http_response(const http_request& request)
             response.status_code = "404";
             response.reason_phrase = "Not Found";
         }
-    }
+    } else if (request.method_token == "POST") { /* Target resource needs to process the request */
+        /* RFC7231/4.3.3.
+        * CGI for example comes here
+        * if one or more resources has been created, status code needs to be 201 with "Created"
+        *   with "Location" header field that provides an identifier for the primary resource created
+        *   and a representation that describes the status of the request while referring to the new resource(s).
+        * If no resources are created, respond with 200 that containts the result and a "Content-Location"
+        *   header field that has the same value as the POST's effective request URI
+        * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
+        */  
+    } 
 
 
     /* Control Data RFC7231/7.1. */

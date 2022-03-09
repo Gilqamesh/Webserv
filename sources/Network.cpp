@@ -12,8 +12,7 @@ void Network::initNetwork(char *file_name)
 
     for (size_t i = 0; i < configs.size(); i++)
     {
-	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses, &events);
-        serverNetwork[i].cache_file(configs[i] /* configs[i].locations[j].root + "/" + configs[i].locations[j].index, configs[i].locations[j].route, false */);
+	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses, &events, configs[i]);
 	    servers.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
     }
 }

@@ -29,6 +29,7 @@
 # define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*" + CRLF
 
 typedef struct s_server t_server;
+typedef struct s_location t_location;
 
 class server
 {
@@ -49,8 +50,9 @@ private:
     EventHandler                                    *events;
 public:
 
-    void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events);
-    void 			cache_file(const t_server &configuration);
+    void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events,
+                                const t_server &configuration);
+    void 			cache_file(void);
     void            add_resource(const resource &resource);
     inline int      getServerSocketFd(void) const { return (server_socket_fd); }
     int             accept_connection(void);
@@ -92,6 +94,10 @@ private:
 
     std::string     displayTimestamp(void);
     bool            fileExists(const std::string& file);
+    std::string     isAllowedDirectory(const std::string &target);
+
+    std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
+    std::map<std::string, t_location>   sortedRoutes; /* for isAllowedDirectory to handle more specific routes first instead of the generic ones */
 };
 
 #endif

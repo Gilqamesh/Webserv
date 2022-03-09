@@ -67,6 +67,10 @@
         "unordered_set": "cpp",
         "csignal": "cpp",
         "memory_resource": "cpp",
-        "__functional_03": "cpp"
+        "__functional_03": "cpp",
+        "bit": "cpp",
+        "deque": "cpp",
+        "iomanip": "cpp",
+        "stack": "cpp"
     }
 }
