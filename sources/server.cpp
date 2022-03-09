@@ -85,40 +85,43 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
 * NEED: specify if resource is served statically or dynamically, in which case script_path also needs to be provided
 * OPTIONAL: content-encoding, content_language, content-location
 */
-void server::cache_file(const std::string &path, const std::string &route, bool is_static)
+void server::cache_file(const t_server &configuration/* const std::string &path, const std::string &route */)
 {
-    if (cached_resources.count(route))
+    for (unsigned int i = 0; i < configuration.locations.size(); ++i)
     {
-        WARN("route: '" << route << "' already exists");
-        return ;
+        const t_location &cur_location = configuration.locations[i];
+        if (cached_resources.count(cur_location.route))
+        {
+            WARN("route: '" << cur_location.route << "' already exists");
+            return ;
+        }
+        const std::string &path = cur_location.root + "/" + cur_location.index;
+        std::ifstream ifs(path, std::ifstream::in);
+        if (!ifs)
+        {
+            WARN("file '" + path + "' could not be opened");
+            return ;
+        }
+        std::string tmp;
+        std::string content;
+        while (getline(ifs, tmp))
+            content += tmp;
+        resource res;
+        res.target = cur_location.route;
+        res.content = content;
+        res.path = path;
+        /* for now hard-coded, but this needs to be whatever the file's type is */
+        res.content_type = "text/html";
+        // /* for now hard-coded, but it needs to be the file path relative */
+        // res.content_location = path + ".html";
+        for (unsigned int i = 0; i < cur_location.methods.size(); ++i)
+            res.allowed_methods.insert(cur_location.methods[i]);
+        /* for now hard-coded */
+        res.is_static = true;
+        /* if resource is dynamic, this also has to be provided */
+        // res.script_path = ...;
+        add_resource(res);
     }
-    std::ifstream ifs(path, std::ifstream::in);
-    if (!ifs)
-    {
-        WARN("file '" + path + "' could not be opened");
-        return ;
-    }
-    std::string tmp;
-    std::string content;
-    while (getline(ifs, tmp))
-        content += tmp;
-    resource res;
-    res.target = route;
-    res.content = content;
-    res.path = path;
-    /* for now hard-coded, but this needs to be whatever the file's type is */
-    res.content_type = "text/html";
-    // /* for now hard-coded, but it needs to be the file path relative */
-    // res.content_location = path + ".html";
-    /* for now hard-coded */
-    res.allowed_methods.insert("GET");
-    res.allowed_methods.insert("HEAD");
-    res.allowed_methods.insert("DELETE");
-    /* for now hard-coded */
-    res.is_static = is_static;
-    /* if resource is dynamic, this also has to be provided */
-    // res.script_path = ...;
-    add_resource(res);
 }
 
 void server::add_resource(const resource &resource)
@@ -506,7 +509,21 @@ http_response server::format_http_response(const http_request& request)
                 response.payload = cached_resources["/successfulDelet"].content;
             }
             else
-                response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
+            {
+                if (request.header_fields.count("Range"))
+                {
+                    // bytes=0-100
+                    if (match_pattern(request.header_fields.at("Range"), "bytes=[0-9]+-[0-9]+"))
+                    {
+                        int first = std::stoi(request.header_fields.at("Range").c_str() + 6);
+                        int second = std::stoi(request.header_fields.at("Range").c_str() + request.header_fields.at("Range").find_first_of("-") + 1);
+                        response.payload = cached_resources[request.target].content.substr(0, std::max(first, second));
+                        response.header_fields["Content-Length"] = std::to_string(std::min(std::max(first, second), (int)cached_resources[request.target].content.size()));
+                    }
+                }
+                else
+                    response.payload = cached_resources[request.target].content.substr(0, std::atoi(response.header_fields["Content-Length"].c_str()));
+            }
         }
         else
             response.payload = cached_resources[request.target].content;
@@ -630,7 +647,7 @@ void server::router(int socket, const http_response &response)
     // LOG("Payload: " << response.payload);
 
     std::string message = response.http_version + " " + response.status_code + " " + response.reason_phrase + "\n";
-    for (std::unordered_map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
+    for (std::map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
         message += cit->first + ":" + cit->second + "\n";
     message += "\n";
     message += response.payload;
@@ -676,7 +693,7 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     script.add_meta_variable("REQUEST_URI", cached_resources[request.target].path);
     /* name/version of the server, no clue what this means currently.. */
     // script.add_meta_variable("SERVER_SOFTWARE", "");
-    for (std::unordered_map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)
+    for (std::map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)
     {
         if (cit->first == "Authorization" || cit->first == "Content-Length" || cit->first == "Content-Type"
             || cit->first == "Connection")

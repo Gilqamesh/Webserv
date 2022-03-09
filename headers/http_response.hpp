@@ -2,7 +2,7 @@
 # define HTTP_RESPONSE
 
 # include <string>
-# include <unordered_map>
+# include <map>
 
 struct http_response
 {
@@ -16,7 +16,7 @@ struct http_response
     std::string                                     status_code;
     std::string                                     reason_phrase;
 
-    std::unordered_map<std::string, std::string>    header_fields;
+    std::map<std::string, std::string>              header_fields;
     std::string                                     payload; /* message body RFC7230/3.3.*/
 
     bool                                            reject;

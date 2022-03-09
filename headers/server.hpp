@@ -28,6 +28,7 @@
 # define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" + CRLF /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
 # define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*" + CRLF
 
+typedef struct s_server t_server;
 
 class server
 {
@@ -49,7 +50,7 @@ private:
 public:
 
     void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events);
-    void 			cache_file(const std::string &path, const std::string &route, bool is_static = true);
+    void 			cache_file(const t_server &configuration);
     void            add_resource(const resource &resource);
     inline int      getServerSocketFd(void) const { return (server_socket_fd); }
     int             accept_connection(void);

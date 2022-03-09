@@ -2,7 +2,7 @@
 # define HTTP_REQUEST
 
 # include <string>
-# include <unordered_map>
+# include <map>
 
 struct http_request
 {
@@ -17,7 +17,7 @@ struct http_request
     std::string                                     target; /* abs_path RFC2396/3., ex. /about.txt?q=hi */
     std::string                                     protocol_version;
 
-    std::unordered_map<std::string, std::string>    header_fields;
+    std::map<std::string, std::string>              header_fields;
     std::string                                     payload; /* message body RFC7230/3.3.*/
     bool                                            reject;
 
