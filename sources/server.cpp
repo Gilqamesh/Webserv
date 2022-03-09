@@ -655,7 +655,8 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
     if (request.header_fields.count("Content-Type"))
         script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
-    script.add_meta_variable("PATH_INFO", request.abs_path);
+    script.add_meta_variable("PATH_INFO", cached_resources[request.target].path);
+    // script.add_meta_variable("PATH_INFO", request.abs_path);
     char *cwd;
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
@@ -672,6 +673,7 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     script.add_meta_variable("SERVER_NAME", this->hostname);
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
+    script.add_meta_variable("REQUEST_URI", cached_resources[request.target].path);
     /* name/version of the server, no clue what this means currently.. */
     // script.add_meta_variable("SERVER_SOFTWARE", "");
     for (std::unordered_map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)

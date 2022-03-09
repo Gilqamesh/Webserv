@@ -53,7 +53,6 @@ void CGI::execute(void)
             env.push_back(tmp);
         }
         env.push_back(NULL);
-        LOG("Path translated :" << meta_variables["PATH_TRANSLATED"]);
         if (dup2(m_pipe[WRITE_END], STDOUT_FILENO) == -1)
             TERMINATE("dup2 failed");
         close(m_pipe[WRITE_END]);
