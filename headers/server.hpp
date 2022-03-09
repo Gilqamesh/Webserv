@@ -89,7 +89,7 @@ private:
     void            initialize_constants(void); // helper
     void            add_script_meta_variables(CGI &script, const http_request &request);
 
-    void            displayTimestamp(void);
+    std::string     displayTimestamp(void);
     bool            fileExists(const std::string& file);
 };
 

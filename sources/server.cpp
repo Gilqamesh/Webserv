@@ -73,8 +73,7 @@ void    server::construct(int port, int backlog, unsigned long timestamp, std::m
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     // LOG("Server listens on port: " << server_port);
-    server::displayTimestamp();
-    LOG("Server listens on port: " << server_port);
+    LOG(displayTimestamp() << " Server listens on port: " << server_port);
 }
 
 /*
@@ -160,8 +159,7 @@ int server::accept_connection(void)
     // identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
 
 //    LOG_TIME("Client joined from socket: " << new_socket);
-    server::displayTimestamp();
-    LOG("Client joined from socket: " << new_socket);
+    LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
 
    return new_socket;
 }
@@ -187,14 +185,12 @@ void server::cut_connection(int socket)
     if (socket == server_socket_fd)
     {
         // LOG_TIME("Server disconnected on socket: " << socket);
-        server::displayTimestamp();
-        LOG("Server disconnected on socket: " << socket);
+        LOG(displayTimestamp() << " Server disconnected on socket: " << socket);
     }
     else
     {
         // LOG_TIME("Client disconnected on socket: " << socket);
-        server::displayTimestamp();
-        LOG("Client disconnected on socket: " << socket);
+        LOG(displayTimestamp() << " Client disconnected on socket: " << socket);
     }
 }
 
@@ -307,8 +303,7 @@ http_request server::parse_request_header(int socket)
         request.payload += current_line;
     // LOG("Payload: " << request.payload);
 
-    server::displayTimestamp();
-    LOG("REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
 }
 
@@ -470,8 +465,7 @@ http_response server::format_http_response(const http_request& request)
 
     payload_header_fields(request, response);
 
-    server::displayTimestamp();
-    LOG("RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
+    LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
 
     /* add payload */
     if (match_pattern(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
@@ -691,21 +685,23 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     }
 }
 
-void	server::displayTimestamp(void)
+std::string	server::displayTimestamp(void)
 {
-	time_t		now = time(0);
+	time_t		       now = time(0);
+    std::ostringstream buffer;
 
     tm *ltm = localtime(&now);
-    std::cout << "[";
+    buffer << "[";
     if (ltm->tm_hour < 10)
-        std::cout << '0';
-    std::cout << ltm->tm_hour << ":";
+        buffer << '0';
+    buffer << ltm->tm_hour << ":";
     if (ltm->tm_min < 10)
-        std::cout << '0';
-    std::cout << ltm->tm_min << ":";
+        buffer << '0';
+    buffer << ltm->tm_min << ":";
     if (ltm->tm_sec < 10)
-        std::cout << '0';
-	std::cout << ltm->tm_sec << "] ";
+        buffer << '0';
+	buffer << ltm->tm_sec << "] ";
+    return buffer.str();
 }
 
 bool server::fileExists(const std::string& file)
