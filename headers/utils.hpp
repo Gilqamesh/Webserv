@@ -4,10 +4,9 @@
 # include <string>
 
 /*
-* Returns one line read from 'fd'
-* If there was nothing read, returns with an empty string
+* returns false if EOF
 */
-std::string get_next_line(int fd);
+std::pair<std::string, bool> get_next_line(int fd);
 
 /* returns true if 'str' matches the 'pattern' */
 bool match_pattern(const std::string &str, const std::string &pattern);

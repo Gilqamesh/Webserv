@@ -35,12 +35,12 @@ static int read_into_buffer(int fd, char **buffer)
     return (0);
 }
 
-std::string get_next_line(int fd)
+std::pair<std::string, bool> get_next_line(int fd)
 {
     static char *buffers[OPEN_MAX] = { 0 };
 
     if (fd < 0 || fd >= OPEN_MAX)
-        return (NULL);
+        return (std::pair<std::string, bool>("", false));
     /* first time we use the specific buffer */
     if (buffers[fd] == NULL)
     {
@@ -52,11 +52,11 @@ std::string get_next_line(int fd)
         if (buffers[fd] == NULL)
             TERMINATE("malloc failed in get_next_line");
         if (read_into_buffer(fd, buffers + fd))
-            return ("");
+            return (std::pair<std::string, bool>("", false));
     }
     /* if we have nothing in the buffer then read into it, return NULL on immediate EOF */
     if (buffers[fd][0] == '\0' && read_into_buffer(fd, buffers + fd))
-        return ("");
+        return (std::pair<std::string, bool>("", false));
     /* check to see if we have a newline in the string */
     char *newline_index = std::strchr(buffers[fd], '\n');
     if (newline_index == NULL) /* no newline in the string */
@@ -66,7 +66,8 @@ std::string get_next_line(int fd)
         */
         std::string tmp = std::string(buffers[fd]);
         buffers[fd][0] = '\0';
-        return (tmp + get_next_line(fd));
+        tmp += get_next_line(fd).first;
+        return (std::pair<std::string, bool>(tmp, true));
     }
     /* there is a newline in the string
     * rearrange buffer
@@ -76,7 +77,7 @@ std::string get_next_line(int fd)
     for (char *cur = buffers[fd]; cur < newline_index; ++cur)
         cur_line += *cur;
     std::memmove(buffers[fd], newline_index + 1, BUFFER_SIZE - (newline_index - buffers[fd]));
-    return (cur_line);
+    return (std::pair<std::string, bool>(cur_line, true));
 }
 
 /*

@@ -25,7 +25,7 @@ typedef struct s_server
 	off_t						client_max_body_size;
 	std::string					server_name;
 	std::vector<t_location>		locations;
-	std::map<int, std::string>	error_page;
+	std::string					error_page;
 }			t_server;
 
 class conf_file

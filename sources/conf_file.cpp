@@ -80,11 +80,11 @@ bool					conf_file::get_server_config(std::string &line)
 	words.back().pop_back();
 	if (words.back().empty())
 		error("wrong config value");
-	if (words.size() == 3 && words.front() == "error_page")
+	if (words.size() == 2 && words.front() == "error_page")
 	{
-		if (!is_number(words[1]))
-			error("wrong error num");
-		_server_buf.error_page.insert(std::pair<int, std::string>(std::stoi(words[1]), words.back()));
+		if (!_server_buf.error_page.empty())
+			error("erorr page already exist");
+		_server_buf.error_page = words.back();
 	}
 	else if (words.size() == 2 && words.front() == "listen")
 	{

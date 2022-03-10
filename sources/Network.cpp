@@ -40,9 +40,9 @@ void Network::runNetwork()
                 if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
                 {
                     std::string response;
-                    std::string tmp;
-                    while ((tmp = get_next_line(*(int *)events[i].udata)).length())
-                        response += tmp;
+                    std::pair<std::string, bool> gnlPair;
+                    while ((gnlPair = get_next_line(*(int *)events[i].udata)).second)
+                        response += gnlPair.first;
                     LOG("CGI Response: " << response);
                     send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
                 }

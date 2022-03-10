@@ -11,6 +11,7 @@
 # include <string>
 # include <fstream>
 # include <sstream>
+# include <dirent.h> // opendir
 
 # include <poll.h>          // poll
 # include <sys/select.h>    // select
