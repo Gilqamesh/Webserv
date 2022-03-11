@@ -12,6 +12,7 @@
 # include <fstream>
 # include <sstream>
 # include <dirent.h> // opendir
+# include <regex.h> // 
 
 # include <poll.h>          // poll
 # include <sys/select.h>    // select

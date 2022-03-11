@@ -9,76 +9,8 @@
 # define OPEN_MAX 1000
 #endif
 #ifndef BUFFER_SIZE
-# define BUFFER_SIZE 1
+# define BUFFER_SIZE 42
 #endif
-
-static int read_into_buffer(int fd, char **buffer)
-{
-    /* read into the buffer and null terminate it */
-    int read_ret = read(fd, *buffer, BUFFER_SIZE);
-    if (read_ret == -1) { /* read failed */
-        // std::free(*buffer);
-        // *buffer = NULL;
-        /* NO TERMINATE
-        * because we have non-blocking sockets, we can get error from read EWOULDBLOCK,
-        * in which case the rest of the buffer might need to be handled differently
-        */
-       return (1);
-    }
-    if (read_ret == 0) { /* immediate EOF */
-        std::free(*buffer);
-        *buffer = NULL;
-        return (1);
-    }
-    /* EOF might have been reached, null terminate the buffer at the correct position */
-    (*buffer)[read_ret] = '\0';
-    return (0);
-}
-
-std::pair<std::string, bool> get_next_line(int fd)
-{
-    static char *buffers[OPEN_MAX] = { 0 };
-
-    if (fd < 0 || fd >= OPEN_MAX)
-        return (std::pair<std::string, bool>("", false));
-    /* first time we use the specific buffer */
-    if (buffers[fd] == NULL)
-    {
-        /*
-        * +1 for the null terminating character
-        * this also let's us track the end of the string
-        */
-        buffers[fd] = (char *)std::malloc(BUFFER_SIZE + 1);
-        if (buffers[fd] == NULL)
-            TERMINATE("malloc failed in get_next_line");
-        if (read_into_buffer(fd, buffers + fd))
-            return (std::pair<std::string, bool>("", false));
-    }
-    /* if we have nothing in the buffer then read into it, return NULL on immediate EOF */
-    if (buffers[fd][0] == '\0' && read_into_buffer(fd, buffers + fd))
-        return (std::pair<std::string, bool>("", false));
-    /* check to see if we have a newline in the string */
-    char *newline_index = std::strchr(buffers[fd], '\n');
-    if (newline_index == NULL) /* no newline in the string */
-    {
-        /* return the concatanation of the string and gnl()
-        * handle the buffer first to prepare for the next call
-        */
-        std::string tmp = std::string(buffers[fd]);
-        buffers[fd][0] = '\0';
-        tmp += get_next_line(fd).first;
-        return (std::pair<std::string, bool>(tmp, true));
-    }
-    /* there is a newline in the string
-    * rearrange buffer
-    * then return the line up to the newline included
-    */
-    std::string cur_line;
-    for (char *cur = buffers[fd]; cur < newline_index; ++cur)
-        cur_line += *cur;
-    std::memmove(buffers[fd], newline_index + 1, BUFFER_SIZE - (newline_index - buffers[fd]));
-    return (std::pair<std::string, bool>(cur_line, true));
-}
 
 /*
 * Based on this: https://regexr.com/
@@ -231,4 +163,195 @@ std::string to_upper(const std::string &str)
     for (std::string::const_iterator cit = str.begin(); cit != str.end(); ++cit)
         res.push_back(::toupper(*cit));
     return (res);
+}
+
+bool match(const std::string &what, const std::string &pattern)
+{
+    regex_t re;
+    if (regcomp(&re, pattern.c_str(), REG_EXTENDED | REG_NOSUB))
+        TERMINATE("regcomp failed");
+    int ret = regexec(&re, what.c_str(), (size_t)0, 0, 0);
+    regfree(&re);
+    return (ret == 0);
+}
+
+static void	*ft_calloc(size_t count, size_t size)
+{
+	unsigned char	*ptr;
+	size_t			n_bzero;
+	int				i;
+
+	ptr = (unsigned char *)malloc(count * size);
+	n_bzero = count * size;
+	if (ptr != 0)
+	{
+		i = 0;
+		while (n_bzero-- > 0)
+			ptr[i++] = '\0';
+		return (ptr);
+	}
+	return (0);
+}
+
+static char	*ft_strchr(const char *s, int c)
+{
+	while (*s != '\0')
+	{
+		if (*s == c)
+			return ((char *)s);
+		s++;
+	}
+	if (*s == c)
+		return ((char *)s);
+	return (NULL);
+}
+
+static size_t	ft_strlen(const char *s)
+{
+	size_t	i;
+
+	i = 0;
+	while (s[i] != '\0')
+		i++;
+	return (i);
+}
+
+static char	*ft_strjoin(char *s1, char *s2)
+{
+	char	*s_join;
+	int		len_s1;
+	int		len_s2;
+	int		i;
+	int		j;
+
+	if (s1 == 0 || s2 == 0)
+		return (0);
+	len_s1 = ft_strlen(s1);
+	len_s2 = ft_strlen(s2);
+	s_join = (char *)malloc(sizeof(*s1) * (len_s1 + len_s2) + 1);
+	if (s_join == NULL)
+		return (NULL);
+	i = 0;
+	while (s1[i] != '\0')
+	{
+		s_join[i] = s1[i];
+		i++;
+	}
+	j = 0;
+	while (s2[j] != '\0')
+		s_join[i++] = s2[j++];
+	s_join[i] = '\0';
+	free(s1);
+	return (s_join);
+}
+
+static char	*get_temp(char *temp_old, int len_line)
+{
+	char	*temp_new;
+	int		j;
+	int		k;
+	int		l;
+
+	if (temp_old[len_line] == '\0')
+		k = len_line;
+	else
+		k = len_line + 1;
+	j = 0;
+	l = k;
+	while (temp_old[k++] != '\0')
+		j++;
+	temp_new = (char *)malloc(sizeof(char) * j + 1);
+	if (temp_new == NULL)
+		return (NULL);
+	j = 0;
+	while (temp_old[l] != '\0')
+		temp_new[j++] = temp_old[l++];
+	temp_new[j] = '\0';
+	free(temp_old);
+	return (temp_new);
+}
+
+static char	*get_line(char *text)
+{
+	char	*line;
+	int		i;
+
+	i = 0;
+	while (text[i] != '\n' && text[i] != '\0')
+		i++;
+	line = (char *)malloc(sizeof(char) * i + 1);
+	if (line == NULL)
+		return (NULL);
+	i = 0;
+	while (text[i] != '\n' && text[i] != '\0')
+	{
+		line[i] = text[i];
+		i++;
+	}
+	line[i] = '\0';
+	return (line);
+}
+
+static char	*free_temp(char **temp)
+{
+	free(*temp);
+	*temp = NULL;
+	return (NULL);
+}
+
+static char	*output(char *text)
+{
+	char		*line;
+	static char	*temp;
+
+	if (temp == NULL)
+		temp = (char *)ft_calloc(1, 1);
+	if (temp == NULL)
+		return (NULL);
+	if (ft_strlen(text) > 0)
+		temp = ft_strjoin(temp, text);
+	free(text);
+	if (ft_strlen(temp) == 0)
+		return (free_temp(&temp));
+	line = get_line(temp);
+	if (temp[ft_strlen(line)] == '\n')
+	{
+		temp = get_temp(temp, ft_strlen(line));
+		return (ft_strjoin(line, (char *)"\n"));
+	}
+	else
+	{
+		free(temp);
+		temp = NULL;
+		return (line);
+	}
+}
+
+char	*get_next_line(int fd)
+{
+	char		*buffer;
+	char		*text;
+	int			buff_size;
+
+	buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE + 1);
+	text = (char *)ft_calloc(1, 1);
+	if (text == NULL || buffer == NULL || BUFFER_SIZE <= 0)
+		return (NULL);
+	buff_size = read(fd, buffer, BUFFER_SIZE);
+	while (buff_size > 0)
+	{
+		buffer[buff_size] = '\0';
+		if (ft_strchr(buffer, '\n'))
+		{
+			text = ft_strjoin(text, buffer);
+			break ;
+		}
+		else
+		{
+			text = ft_strjoin(text, buffer);
+			buff_size = read(fd, buffer, BUFFER_SIZE);
+		}
+	}
+	free(buffer);
+	return (output(text));
 }

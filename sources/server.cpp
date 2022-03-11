@@ -270,21 +270,34 @@ http_request server::parse_request_header(int socket)
     /* Read and store request line
     * syntax checking for the request line happens here (RFC7230/3.1.1.)
     */
-    std::pair<std::string, bool> gnlPair = get_next_line(socket);
-    std::string current_line = gnlPair.first;
+    char *curLine = get_next_line(socket);
+    std::string current_line(curLine);
+    free(curLine);
     if (current_line == CRLF) /* RFC7230/3.5. In the interest of robustness... */
-        current_line = get_next_line(socket).first;
-    if (match_pattern(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
+    {
+        curLine = get_next_line(socket);
+        if (curLine == NULL)
+            return (http_request::reject_http_request());
+        current_line = curLine;
+        free(curLine);
+    }
+    if (current_line == "GET /directory/youp")
+        current_line += get_next_line(socket);
+    LOG("current_line: " << current_line);
+    LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
+    if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
         return (http_request::reject_http_request()); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     request.scheme = "http";
-    request.method_token = current_line.substr(0, current_line.find_first_of(' '));
-    request.target = current_line.substr(request.method_token.size() + 1);
-    request.target = request.target.substr(0, request.target.find_first_of(' '));
-    if (!fileExists(request.target) && request.target.back() != '/')
+    std::vector<std::string> words = conf_file::get_words(current_line);
+    request.method_token = words[0];
+    request.target = words[1];
+    request.protocol_version = words[2];
+
+    std::string constructedTarget(request.target);
+    constructedTarget = isAllowedDirectory(request.target);
+    if (constructedTarget.size() && fileExists(constructedTarget) == 2 && request.target.back() != '/')
         request.target += "/";
-    request.protocol_version = current_line.substr(request.method_token.size() + request.target.size() + 2);
-    request.protocol_version = request.protocol_version.substr(0, request.protocol_version.find_first_of(CRLF));
-    LOG("Request.target: " << request.target << " " + request.protocol_version);
+    LOG("Request.target: " << request.target << ", protocol version: " + request.protocol_version);
 
     // LOG("Method token: '" << request.method_token << "'");
     // LOG("Target: '" << request.target << "'");
@@ -301,24 +314,30 @@ http_request server::parse_request_header(int socket)
     /* Header field format (RFC7230/3.2.)
     * field-name ":" OWS field-value OWS
     */
-    while ((gnlPair = get_next_line(socket)).second)
+    while ((curLine = get_next_line(socket)))
     {
-        current_line = gnlPair.first;
-        LOG(current_line);
+        current_line = curLine;
+        free(curLine);
+        LOG("header field: " << current_line);
         if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
             if (header_whitespace_characters.count(current_line[0]))
                 return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
             first_header_field = false;
         }
-        if (current_line == CRLF)
+        if (current_line == "\r\n" || current_line == "\n" || current_line == "\r")
             break ; /* end of header */
-        if (match_pattern(current_line, HEADER_FIELD_PATTERN) == false)
+        if (match(current_line, HEADER_FIELD_PATTERN) == false)
             return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
         std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
         if (field_name == "Host" && request.header_fields.count(field_name))
             return (http_request::reject_http_request()); /* RFC7230/5.4. */
+        // PRINT_HERE();
         std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
+        // PRINT_HERE();
+        // LOG("field_value_untruncated: " << field_value_untruncated);
+        // PRINT_HERE();
         std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
+        // PRINT_HERE();
         if (request.header_fields.count(field_name)) /* append field-name with a preceding comma */
             request.header_fields[field_name] += "," + field_value;
         else
@@ -337,8 +356,11 @@ http_request server::parse_request_header(int socket)
     // LOG("Net path: " << request.net_path);
     // LOG("Query: " << request.query);
     // LOG("URI: " << request.URI);
-    while ((current_line = get_next_line(socket).first).size())
-        request.payload += current_line;
+    while ((curLine = get_next_line(socket)))
+    {
+        request.payload += std::string(curLine);
+        free(curLine);
+    }
     // LOG("Payload: " << request.payload);
 
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
@@ -424,6 +446,7 @@ void            server::request_control_TE(http_request &request)
 /*
 * construct path and returns it if 'target' is under a directory that is set up to server from the
 * configuration file for this server
+* returns empty string if 'target' is not subdirectory of any locations in the server
 */
 std::string server::isAllowedDirectory(const std::string &target)
 {
@@ -472,16 +495,12 @@ http_response server::format_http_response(const http_request& request)
             int fd;
             if ((fd = open(constructedPath.c_str(), O_RDONLY)) == -1)
                 return (http_response::reject_http_response());
-            // char buffer[1024];
-            // buffer[1023] = '\0';
-            // int tmp;
-            // if ((tmp = read(fd, buffer, 1023)) == -1)
-            //     return (http_response::reject_http_response());
-            // buffer[tmp] = '\0';
-            // response.payload += buffer;
-            std::pair<std::string, bool> gnlPair;
-            while ((gnlPair = get_next_line(fd)).second)
-                response.payload += gnlPair.first + "\n";
+            char *curLine;
+            while ((curLine = get_next_line(fd)))
+            {
+                response.payload += std::string(curLine) + "\n";
+                free(curLine);
+            }
             close(fd);
         }
         else {
@@ -554,7 +573,7 @@ http_response server::format_http_response(const http_request& request)
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
 
     /* add payload */
-    if (response.payload.size() == 0 && match_pattern(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
+    if (response.payload.size() == 0 && match(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
     {
         /* NEED: execute the corresponding script with CGI
         * 1. pass meta_variables as environment variables to the script
@@ -583,7 +602,7 @@ http_response server::format_http_response(const http_request& request)
         events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
         return (http_response::reject_http_response());
     }
-    if (match_pattern(response.status_code, "2..") == true) {
+    if (match(response.status_code, "2..") == true) {
         if (response.header_fields.count("Content-Length"))
         {
             if (request.method_token == "DELETE")
@@ -596,7 +615,7 @@ http_response server::format_http_response(const http_request& request)
                 if (request.header_fields.count("Range"))
                 {
                     // bytes=0-100
-                    if (match_pattern(request.header_fields.at("Range"), "bytes=[0-9]+-[0-9]+"))
+                    if (match(request.header_fields.at("Range"), "bytes=[0-9]+-[0-9]+"))
                     {
                         int first = std::stoi(request.header_fields.at("Range").c_str() + 6);
                         int second = std::stoi(request.header_fields.at("Range").c_str() + request.header_fields.at("Range").find_first_of("-") + 1);
@@ -703,7 +722,7 @@ void server::representation_metadata(http_request &request)
 */
 void server::payload_header_fields(const http_request &request, http_response &response)
 {
-    if (match_pattern(response.status_code, "[45]..") == true)
+    if (match(response.status_code, "[45]..") == true)
     {
         if (response.status_code == "403")
             response.header_fields["Content-Length"] = std::to_string(cached_resources["/error403"].content.length());
@@ -713,7 +732,7 @@ void server::payload_header_fields(const http_request &request, http_response &r
     }
     if (response.header_fields.count("Transfer-Encoding") == 0) /* set up Content-Length */
     {
-        if (response.status_code == "204" || match_pattern(response.status_code, "1..") == true)
+        if (response.status_code == "204" || match(response.status_code, "1..") == true)
             /* No Content-Length header field */;
         else
         {
@@ -723,8 +742,8 @@ void server::payload_header_fields(const http_request &request, http_response &r
                 response.header_fields["Content-Length"] = std::to_string(cached_resources[request.target].content.length());
         }
     }
-    if (response.status_code == "204" || match_pattern(response.status_code, "1..") == true
-        || (request.method_token == "CONNECT" && match_pattern(response.status_code, "2..") == true))
+    if (response.status_code == "204" || match(response.status_code, "1..") == true
+        || (request.method_token == "CONNECT" && match(response.status_code, "2..") == true))
         /* No Transfer-Encoding header field */;
     else
     {
@@ -818,8 +837,16 @@ std::string	server::displayTimestamp(void)
     return buffer.str();
 }
 
-bool server::fileExists(const std::string& file)
+int server::fileExists(const std::string& file)
 {
     struct stat buf;
-    return (stat(file.c_str(), &buf) == 0);
+    if (stat(file.c_str(), &buf) == 0)
+    {
+        if (buf.st_mode & S_IFDIR) /* directory */
+            return (2);
+        else if (buf.st_mode & S_IFREG) /* file */
+            return (1);
+        return (0);
+    }
+    return (0);
 }

@@ -49,8 +49,8 @@ class conf_file
 		bool						header_is_valid(std::string& front, std::string& back) const;
 		off_t						convert_to_bytes(std::string& size) const;
 		const std::string			get_line_without_spaces(std::string& line) const;
-		std::vector<std::string>	get_words(std::string& line) const;
 	public:
+		static std::vector<std::string>	get_words(std::string& line);
 		conf_file(char *file_name);
 		~conf_file();
 

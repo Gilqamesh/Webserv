@@ -7,6 +7,8 @@
 
 int main(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
     /* TEST match_pattern */
     // LOG(match_pattern("hello", "hello"));
     // LOG(match_pattern("llll", "[l]*"));
@@ -113,8 +115,16 @@ int main(int argc, char **argv)
     // while ((tmp = get_next_line(fd)).size())
     //     end += tmp;
     // LOG(end);
-    (void)argc;
-    (void)argv;
-    LOG(match_pattern("http /directory/ TTP/1.1" + CRLF, HEADER_RESPONSE_LINE_PATTERN));
-    LOG(match_pattern("http /directory/ HTTP/1.1" + CRLF, HEADER_RESPONSE_LINE_PATTERN));
+    // (void)argc;
+    // (void)argv;
+    // LOG(match_pattern("http /directory/ TTP/1.1" + CRLF, HEADER_RESPONSE_LINE_PATTERN));
+    // LOG(match_pattern("http /directory/ HTTP/1.1" + CRLF, HEADER_RESPONSE_LINE_PATTERN));
+    int fd;
+    fd = open(argv[1], O_RDONLY);
+    char *line;
+    while ((line = get_next_line(fd)))
+    {
+        printf("%s", line);
+        free(line);
+    }
 }

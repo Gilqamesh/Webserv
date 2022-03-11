@@ -24,9 +24,9 @@
 # define MAX_EVENTS 32 
 
 # define HEADER_WHITESPACES " \t"
-# define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*" + CRLF
-# define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" + CRLF /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
-# define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*" + CRLF
+# define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*"
+# define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
+# define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*"
 
 typedef struct s_server t_server;
 typedef struct s_location t_location;
@@ -93,7 +93,7 @@ private:
     void            add_script_meta_variables(CGI &script, const http_request &request);
 
     std::string     displayTimestamp(void);
-    bool            fileExists(const std::string& file);
+    int             fileExists(const std::string& file);
     std::string     isAllowedDirectory(const std::string &target);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
