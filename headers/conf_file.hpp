@@ -14,8 +14,11 @@ typedef struct s_location
 	std::string					root;
 	std::string					index;
 	std::string					route;
+	std::string					redirect;
 	std::string					language; // would be cool to implement
 	std::string					media_type;
+	std::string					cgi_path;
+	std::string					cgi_extension;
 	std::vector<std::string>	methods;
 }			t_location;
 
@@ -23,9 +26,10 @@ typedef struct s_server
 {
 	int							port;
 	off_t						client_max_body_size;
+	std::string					host;
+	std::string					error_page;
 	std::string					server_name;
 	std::vector<t_location>		locations;
-	std::map<int, std::string>	error_page;
 }			t_server;
 
 class conf_file
@@ -39,7 +43,7 @@ class conf_file
 		void						parse_server();
 		void						update_server_buffer();
 		void						update_location_buffer();
-		void						get_input(char *file_name);
+		void						get_input(std::string file_name);
 		void						parse_location(int idx, int start);
 		void						error(std::string message) const;
 		bool						is_number(std::string& port) const;
@@ -51,7 +55,7 @@ class conf_file
 		const std::string			get_line_without_spaces(std::string& line) const;
 		std::vector<std::string>	get_words(std::string& line) const;
 	public:
-		conf_file(char *file_name);
+		conf_file(std::string file_name);
 		~conf_file();
 
 		std::vector<t_server>	get_configs() const;

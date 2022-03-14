@@ -1,16 +1,17 @@
 #include "server.hpp"
 #include "conf_file.hpp"
 
+#include <iostream>
+
 int main(int argc, char **argv)
 {
+    if (argc != 2)
+        return (1);
     pid_t               pid;
     conf_file           configurations(argv[1]);
     std::vector<t_server> configs;
 
     configs = configurations.get_configs();
-
-    if (argc != 2)
-        return (1);
 
     for  (size_t i = 0; i < configs.size(); i++)
     {

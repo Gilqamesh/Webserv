@@ -1,7 +1,9 @@
 #include "../headers/conf_file.hpp"
 
-conf_file::conf_file(char *file_name)
+conf_file::conf_file(std::string file_name)
 {
+	if (file_name.substr(file_name.find_last_of(".") + 1) != "conf")
+		error("wrong conf file extension. Usege: ./webser <name>.conf");
 	get_input(file_name);
 	update_server_buffer();
 	update_location_buffer();
@@ -18,7 +20,7 @@ std::vector<t_server>	conf_file::get_configs() const
 	return (_servers);
 }
 
-void					conf_file::get_input(char *file_name)
+void					conf_file::get_input(std::string file_name)
 {
 	int							brackets[2];
 	std::string					line;
@@ -27,6 +29,8 @@ void					conf_file::get_input(char *file_name)
 
 	brackets[0] = 0;
 	brackets[1] = 0;
+	if (input == 0)
+		error("file does not exist");
 	while (std::getline(input, line))
 	{
 		if (line_is_comment(line) || line_is_empty(line))
@@ -80,17 +84,21 @@ bool					conf_file::get_server_config(std::string &line)
 	words.back().pop_back();
 	if (words.back().empty())
 		error("wrong config value");
-	if (words.size() == 3 && words.front() == "error_page")
+	if (words.size() == 2 && words.front() == "error_page")
 	{
-		if (!is_number(words[1]))
-			error("wrong error num");
-		_server_buf.error_page.insert(std::pair<int, std::string>(std::stoi(words[1]), words.back()));
+		if (!_server_buf.error_page.empty())
+			error("error page already exist");
+		_server_buf.error_page = words.back();
 	}
 	else if (words.size() == 2 && words.front() == "listen")
 	{
-		if (!is_number(words[1]) || _server_buf.port != -1)
-			error("incorrect port");
-		_server_buf.port = std::stoi(words[1]);
+		if (_server_buf.port != -1)
+			error("port already exist");
+		_server_buf.host = words[1].substr(0, words[1].find(':'));
+		std::string port = words[1].substr(words[1].find(':') + 1, words[1].size() - _server_buf.host.size() - 1);
+		if (!is_number(port))
+			error("wrong port");
+		_server_buf.port = std::stoi(port);
 	}
 	else if (words.size() == 2 && words.front() == "server_name")
 	{
@@ -105,7 +113,7 @@ bool					conf_file::get_server_config(std::string &line)
 		_server_buf.client_max_body_size = convert_to_bytes(words[1]);
 	}
 	else
-		error("wrong config name");
+		error("wrong config name - " + line);
 	return (0);
 }
 
@@ -137,7 +145,7 @@ void					conf_file::parse_location(int idx, int start)
 			_location_buf.index = words[1];
 			_location_buf.media_type = words[1].substr(words[1].find_last_of('.'), words[1].size());
 		}
-		else if (words.size() > 2 && words.front() == "method")
+		else if (words.size() >= 2 && words.front() == "method")
 		{
 			for (size_t i = 1; i < words.size(); i++)
 			{
@@ -153,6 +161,24 @@ void					conf_file::parse_location(int idx, int start)
 				error("client_max_body_size for location already exist");
 			_location_buf.client_max_body_size = convert_to_bytes(words[1]);
 		}
+		else if (words.size() == 2 && words.front() == "cgi_extension")
+		{
+			if (!_location_buf.cgi_extension.empty())
+				error("cgi_extension for location already exist");
+			_location_buf.cgi_extension = words.back();
+		}
+		else if (words.size() == 2 && words.front() == "cgi_path")
+		{
+			if (!_location_buf.cgi_path.empty())
+				error("cgi_path for location already exists");
+			_location_buf.cgi_path = words.back();
+		}
+		else if (words.size() == 2 && words.front() == "redirect")
+		{
+			if (!_location_buf.redirect.empty())
+				error("redirect already exists");
+			_location_buf.redirect = words.back();
+		}
 		else if (words.size() == 2 && words.front() == "autoindex")
 		{
 			if (_location_buf.autoindex != -1)
@@ -165,7 +191,7 @@ void					conf_file::parse_location(int idx, int start)
 				error("wrong autoindex value");
 		}
 		else
-			error("worong location config name");
+			error("wrong location config name");
 		start++;
 	}
 	_server_buf.locations.push_back(_location_buf);
@@ -198,6 +224,10 @@ void						conf_file::update_location_buffer()
 		_location_buf.methods.clear();
 	if (!_location_buf.media_type.empty())
 		_location_buf.media_type.clear();
+	if (!_location_buf.cgi_extension.empty())
+		_location_buf.cgi_extension.clear();
+	if (!_location_buf.cgi_path.empty())
+		_location_buf.cgi_path.clear();
 }
 
 off_t						conf_file::convert_to_bytes(std::string& size) const
@@ -299,19 +329,4 @@ bool						conf_file::header_is_valid(std::string &front, std::string &back) cons
 		get_line_without_spaces(back).compare("}"))
 		return (0);
 	return (1);
-}
-
-void	conf_file::print()
-{
-	for (size_t i = 0; i < _servers.size(); i++)
-	{
-		std::cout << _servers[i].port << std::endl;
-		std::cout << _servers[i].server_name << std::endl;
-		for (size_t j = 0; j < _servers[i].locations.size(); j++)
-		{
-			std::cout << _servers[i].locations[j].root << std::endl;
-			std::cout << _servers[i].locations[j].index << std::endl;
-			std::cout << _servers[i].locations[j].route << std::endl;
-		}
-	}
 }

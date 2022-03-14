@@ -65,6 +65,10 @@
         "utility": "cpp",
         "vector": "cpp",
         "unordered_set": "cpp",
-        "csignal": "cpp"
+        "csignal": "cpp",
+        "bit": "cpp",
+        "deque": "cpp",
+        "iomanip": "cpp",
+        "stack": "cpp"
     }
 }
