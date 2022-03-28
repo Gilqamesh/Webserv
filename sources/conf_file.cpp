@@ -254,7 +254,7 @@ off_t						conf_file::convert_to_bytes(std::string& size) const
 	return (0);
 }
 
-std::vector<std::string>	conf_file::get_words(std::string &line) const
+std::vector<std::string>	conf_file::get_words(std::string &line)
 {
 	std::string					buf;
 	std::vector<std::string>	words;
