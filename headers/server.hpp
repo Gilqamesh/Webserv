@@ -50,9 +50,12 @@ private:
     EventHandler                        *events;
 
     std::vector<std::string>            get_request;
-    bool                                finished_reading;
     std::string                         method;
     bool                                first_read;
+    bool                                finished_reading;
+    bool                                consider_body;
+    bool                                getting_body;
+    std::vector<char>                   main_vec;
 public:
 
     void            read_request(int fd);

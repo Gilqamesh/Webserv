@@ -7,49 +7,54 @@
 */
 
 void    server::read_request(int fd)
-{
-    // FILE    *fp;
+{   
+    LOG("\nfinished_readding = " << finished_reading);
+    LOG("consider_body     = " << consider_body);
+    LOG("getting_body      = " << getting_body);
     char    *char_line = NULL;
-    // size_t  len = 0;
-    // ssize_t read;
-
     std::string  line;
-    // fp = fdopen(fd, "r");
-    // while ((read = getline(&char_line, &len, fp)) != -1) 
-    // {
-    //     line = char_line;
-    //     printf("Line - %s", char_line);
-    //     // printf("Retrieved line of length %zu:\n", read);
-    //     get_request.push_back(line);
-    //     free(char_line);
-    //     char_line = NULL;
-    // }
-    // LOG("");
-    // fclose(fp);
 
-    // while line is not empty
-    // while ((char_line = get_next_line(fd)))
-    // {
-    //     line = char_line;
-    //     printf("Line - %s", char_line);
-    //     get_request.push_back(line);
-    //     free(char_line);
-    //     char_line = NULL;
-    // }
     char_line = get_next_line(fd);
     printf("Line - %s", char_line);
+    std::cout << "ASCII - ";
+    for (size_t i = 0; i < strlen(char_line); ++i)
+        printf("%d", char_line[i]);
+    LOG("");
+    // if (first_read == false)
+    // {
+    //     method = conf_file::get_words(line)[0];
+    //     first_read = true;
+    // }
     line = char_line;
-    get_request.push_back(line);
     free(char_line);
     char_line = NULL;
-
-    if (first_read == false)
+    if (consider_body == false)
+        if (line.find("Transfer-Encoding: chunked") != std::string::npos || line.find("Content-Length") != std::string::npos) 
+            consider_body = true;
+    if (line == "\r\n" || line == "\r\n\r\n" || line == "\r" || line == "\n")
     {
-        method = conf_file::get_words(line)[0];
-        first_read = true;
+        if (consider_body == false)
+            finished_reading = true;
+        if (consider_body == true && getting_body == false)
+            getting_body = true;
+        else if (consider_body == true && getting_body == true)
+            finished_reading = true;
+        get_request.push_back(line);
     }
-    if ((line == "\r\n" && method == "GET") || (line == "\r\n\r\n" && method == "GET")
-        finished_reading = true;
+    else
+    {
+        if (get_request.size() == 0)
+            get_request.push_back(line);
+        else
+        {
+            if (get_request.back().back() != '\n')
+            {
+                get_request.back() += line;
+            }
+            else
+                get_request.push_back(line);
+        }
+    }
 }
 
 void server::initialize_constants(void)
@@ -78,6 +83,8 @@ const t_server &configuration)
     locations = configuration.locations;
     finished_reading = false;
     first_read = false;
+    consider_body = false;
+    getting_body = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -288,7 +295,9 @@ void server::handle_connection(int socket)
     if (request.reject == false && finished_reading == false)
         return ;
     finished_reading = false; 
-    first_read = false; 
+    first_read = false;
+    consider_body = false;
+    getting_body = false;
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
@@ -417,8 +426,6 @@ http_request server::parse_request_header(int socket)
         ++i;
     }
 
-    PRINT_HERE();
-
     if (request.header_fields.count("Host") == 0)
         return (http_request::reject_http_request());
     request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
@@ -433,11 +440,8 @@ http_request server::parse_request_header(int socket)
     // LOG("Query: " << request.query);
     // LOG("URI: " << request.URI);
 
-    while (i < get_request.size())
-    {
+    for (; i < get_request.size(); ++i)
         request.payload += get_request[i];
-        i++;
-    }
     // ----
 
     PRINT_HERE();
