@@ -55,6 +55,10 @@ void    server::read_request(int fd)
                 get_request.push_back(line);
         }
     }
+    LOG("get_request.back() = " <<get_request.back());
+    LOG("\nfinished_readding_end = " << finished_reading);
+    LOG("consider_body_end     = " << consider_body);
+    LOG("getting_body_end      = " << getting_body);
 }
 
 void server::initialize_constants(void)
@@ -569,12 +573,21 @@ http_response server::format_http_response(const http_request& request)
 {
     http_response response;
     response.http_version = http_version;
+    LOG("cached_resources.count(request.target) = " << cached_resources.count(request.target));
+    LOG("cached resource:");
+    for (std::map<std::string, resource>::iterator it = cached_resources.begin(); it != cached_resources.end(); ++it)
+    {
+        LOG("route    = " << it->first);
+        // LOG("resource = " << it->second);
+    }
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         std::string constructedPath;
+        
         if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
+            PRINT_HERE();
             response.status_code = "200";
             response.reason_phrase = "OK";
             int fd;
@@ -593,6 +606,9 @@ http_response server::format_http_response(const http_request& request)
             response.reason_phrase = "Not Found";
         }
     } else if (cached_resources[request.target].allowed_methods.count(request.method_token) == 0) { /* Not Allowed */
+        
+
+        
         response.status_code = "405";
         response.reason_phrase = "Method Not Allowed";
         /* RFC7231/6.5.5. must generate Allow header field */
