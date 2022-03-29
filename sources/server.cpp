@@ -8,30 +8,46 @@
 
 void    server::read_request(int fd)
 {   
-    LOG("\nfinished_readding = " << finished_reading);
-    LOG("consider_body     = " << consider_body);
-    LOG("getting_body      = " << getting_body);
+    // LOG("\nfinished_readding = " << finished_reading);
+    // LOG("consider_body     = " << consider_body);
+    // LOG("getting_body      = " << getting_body);
     char    *char_line = NULL;
+    // std::vector<char> buffer(4096);
     std::string  line;
 
+    // read(fd, buffer.begin().base(), 4096);
     char_line = get_next_line(fd);
-    printf("Line - %s", char_line);
-    std::cout << "ASCII - ";
-    for (size_t i = 0; i < strlen(char_line); ++i)
-        printf("%d", char_line[i]);
-    LOG("");
-    // if (first_read == false)
-    // {
-    //     method = conf_file::get_words(line)[0];
-    //     first_read = true;
-    // }
+    // LOG("Line - " << char_line);
+    // std::cout << "ASCII - ";
+    // for (size_t i = 0; i < strlen(char_line); ++i)
+    //     printf("%d", char_line[i]);
+    // LOG("");
     line = char_line;
+    // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
+    //     line += *it;
+    // line += '\0';
+    // LOG("line: " << line);
+    // std::cout << "ASCII - ";
+    // for (size_t i = 0; i < line.size(); ++i)
+    //     printf("%d", line[i]);
+    // LOG(line);
     free(char_line);
     char_line = NULL;
+    /*
+        if we have \r\n\r\n -> parsed entire header
+            1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
+            2. Content-Length -> read until whole length is read
+            3. Return with 400
+        else
+            keep reading until header is parsed
+    */
     if (consider_body == false)
+    {       
         if (line.find("Transfer-Encoding: chunked") != std::string::npos || line.find("Content-Length") != std::string::npos) 
             consider_body = true;
-    if (line == "\r\n" || line == "\r\n\r\n" || line == "\r" || line == "\n")
+
+    }
+    if (line == "\r\n" || line == "\r\n\r\n")
     {
         if (consider_body == false)
             finished_reading = true;
@@ -41,6 +57,22 @@ void    server::read_request(int fd)
             finished_reading = true;
         get_request.push_back(line);
     }
+    // else if (line == "\r")
+    // {
+    //     if (consider_body == false)
+    //         finished_reading = true;
+    //     if (consider_body == true && getting_body == false)
+    //         getting_body = true;
+    //     else if (consider_body == true && getting_body == true)
+    //         finished_reading = true;
+    //     char_line = get_next_line(fd);
+    //         // return /* http_request::bad_request */;
+    //     LOG("Char line: ");
+    //     for (size_t i = 0; i < strlen(char_line); ++i)
+    //         printf("%d", char_line[i]);
+    //     line = char_line;
+    //     get_request.back() += line;
+    // }
     else
     {
         if (get_request.size() == 0)
@@ -54,11 +86,24 @@ void    server::read_request(int fd)
             else
                 get_request.push_back(line);
         }
+        if (get_request.back() == "\r\n" || get_request.back() == "\r\n\r\n")
+        {
+            if (consider_body == false)
+                finished_reading = true;
+            if (consider_body == true && getting_body == false)
+                getting_body = true;
+            else if (consider_body == true && getting_body == true)
+                finished_reading = true;
+        }
+        // std::cout << "ASCII2 - ";
+        // for (size_t i = 0; i < line.size(); ++i)
+        //     printf("%d", line[i]);
+        // LOG("");
     }
-    LOG("get_request.back() = " <<get_request.back());
-    LOG("\nfinished_readding_end = " << finished_reading);
-    LOG("consider_body_end     = " << consider_body);
-    LOG("getting_body_end      = " << getting_body);
+    // LOG("\nget_request.back()  = " << get_request.back());
+    // LOG("finished_readding_end = " << finished_reading);
+    // LOG("consider_body_end     = " << consider_body);
+    // LOG("getting_body_end      = " << getting_body);
 }
 
 void server::initialize_constants(void)
@@ -392,6 +437,7 @@ bool            server::check_prebody(std::string current_line,  http_request &r
 */
 http_request server::parse_request_header(int socket)
 {  
+    PRINT_HERE();
     read_request(socket);
     if (finished_reading == false)
         return (http_request::chunked_http_request());    
@@ -448,7 +494,7 @@ http_request server::parse_request_header(int socket)
         request.payload += get_request[i];
     // ----
 
-    PRINT_HERE();
+    // PRINT_HERE();
 
     // LOG("Payload: " << request.payload);
 
@@ -545,14 +591,32 @@ std::string server::isAllowedDirectory(const std::string &target)
         {
             /* construct string */
             std::string path = cit->second.root + "/";
-            path += target.substr(cit->first.size());
+            // LOG("path: " << path);
+            // LOG("cit->first: " << cit->first);
+            path += target.substr((target[cit->first.size() - 1] == '/' ? cit->first.size() + 1 : cit->first.size()));
+            // path += target.substr(cit->first.size());
+            // /directory
+            // LOG("path: " << path);
             /* remove route from the beginning of 'target'
              * add root to the beginning of target
             */
 
-            if (fileExists(path))
+            // if (target == cit->second.route.substr(0, cit->second.route.find_last_of("/")))
+            //     return (path);
+            int ret = fileExists(path);
+            if (ret == 2) /* if its a directory */
+            {
+                std::string subDirIndex = path + (path.back() == '/' ? "" : "/") + cit->second.index;
+                // LOG("Index - " << subDirIndex);
+                int ret2 = fileExists(subDirIndex);
+                if (ret2 == 1) /* if the index file exists */
+                    return (subDirIndex);
+                else
+                    return ("");
+            }
+            else if (ret == 1) /* if its a file */
                 return (path);
-            else
+            else /* either directory or does not exist */
                 return ("");
         }
     }
@@ -577,7 +641,7 @@ http_response server::format_http_response(const http_request& request)
     LOG("cached resource:");
     for (std::map<std::string, resource>::iterator it = cached_resources.begin(); it != cached_resources.end(); ++it)
     {
-        LOG("route    = " << it->first);
+        LOG("route = " << it->first);
         // LOG("resource = " << it->second);
     }
     if (request.reject == true) { /* Bad Request */
@@ -585,9 +649,11 @@ http_response server::format_http_response(const http_request& request)
         response.reason_phrase = "Bad Request";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         std::string constructedPath;
-        
         if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
             PRINT_HERE();
+            cached_resources[request.target].allowed_methods.insert("GET");
+            cached_resources[request.target].is_static = true;
+            /* add this to the cached_resources */
             response.status_code = "200";
             response.reason_phrase = "OK";
             int fd;
@@ -599,6 +665,8 @@ http_response server::format_http_response(const http_request& request)
                 response.payload += std::string(curLine) + "\n";
                 free(curLine);
             }
+            cached_resources[request.target].content = response.payload;
+            cached_resources[request.target].target = request.target;
             close(fd);
         }
         else {
@@ -606,13 +674,10 @@ http_response server::format_http_response(const http_request& request)
             response.reason_phrase = "Not Found";
         }
     } else if (cached_resources[request.target].allowed_methods.count(request.method_token) == 0) { /* Not Allowed */
-        
-
-        
         response.status_code = "405";
         response.reason_phrase = "Method Not Allowed";
         /* RFC7231/6.5.5. must generate Allow header field */
-        for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].allowed_methods.begin(); cit != cached_resources[request.target].allowed_methods.end(); ++cit)
+        for (std::set<std::string>::const_iterator cit = cached_resources[request.target].allowed_methods.begin(); cit != cached_resources[request.target].allowed_methods.end(); ++cit)
             response.header_fields["Allow"] += response.header_fields.count("Allow") ? "," + *cit : *cit;
     } else if (accepted_request_methods.count(request.method_token) == 0) { /* Not Implemented */
         response.status_code = "501";
@@ -802,9 +867,9 @@ void server::representation_metadata(const http_request &request, http_response 
         return ;
     }
     response.header_fields["Content-Type"] = cached_resources[request.target].content_type;
-    for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
+    for (std::set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
         response.header_fields["Content-Encoding"] += response.header_fields.count("Content-Encoding") ? "," + *cit : *cit;
-    for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_language.begin(); cit != cached_resources[request.target].content_language.end(); ++cit)
+    for (std::set<std::string>::const_iterator cit = cached_resources[request.target].content_language.begin(); cit != cached_resources[request.target].content_language.end(); ++cit)
         response.header_fields["Content-Language"] += response.header_fields.count("Content-Language") ? "," + *cit : *cit;
     if (cached_resources[request.target].content_location.length())
         response.header_fields["Content-Location"] = cached_resources[request.target].content_location;
@@ -849,7 +914,7 @@ void server::payload_header_fields(const http_request &request, http_response &r
     else
     {
         if (response.payload.size() == 0)
-            for (std::unordered_set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
+            for (std::set<std::string>::const_iterator cit = cached_resources[request.target].content_encoding.begin(); cit != cached_resources[request.target].content_encoding.end(); ++cit)
                 response.header_fields["Transfer-Encoding"] += response.header_fields.count("Transfer-Encoding") ? "," + *cit : *cit;
     }
 }
