@@ -5,6 +5,53 @@
 /*
 * helper to initialize some constants
 */
+
+void    server::read_request(int fd)
+{
+    // FILE    *fp;
+    char    *char_line = NULL;
+    // size_t  len = 0;
+    // ssize_t read;
+
+    std::string  line;
+    // fp = fdopen(fd, "r");
+    // while ((read = getline(&char_line, &len, fp)) != -1) 
+    // {
+    //     line = char_line;
+    //     printf("Line - %s", char_line);
+    //     // printf("Retrieved line of length %zu:\n", read);
+    //     get_request.push_back(line);
+    //     free(char_line);
+    //     char_line = NULL;
+    // }
+    // LOG("");
+    // fclose(fp);
+
+    // while line is not empty
+    // while ((char_line = get_next_line(fd)))
+    // {
+    //     line = char_line;
+    //     printf("Line - %s", char_line);
+    //     get_request.push_back(line);
+    //     free(char_line);
+    //     char_line = NULL;
+    // }
+    char_line = get_next_line(fd);
+    printf("Line - %s", char_line);
+    line = char_line;
+    get_request.push_back(line);
+    free(char_line);
+    char_line = NULL;
+
+    if (first_read == false)
+    {
+        method = conf_file::get_words(line)[0];
+        first_read = true;
+    }
+    if ((line == "\r\n" && method == "GET") || (line == "\r\n\r\n" && method == "GET")
+        finished_reading = true;
+}
+
 void server::initialize_constants(void)
 {
     /* add allowed request methods for clients */
@@ -29,6 +76,8 @@ const t_server &configuration)
     cgi_responses = cgiResponses;
     events = eventQueue;
     locations = configuration.locations;
+    finished_reading = false;
+    first_read = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -236,7 +285,10 @@ void server::cut_connection(int socket)
 void server::handle_connection(int socket)
 {
     http_request request = parse_request_header(socket);
-
+    if (request.reject == false && finished_reading == false)
+        return ;
+    finished_reading = false; 
+    first_read = false; 
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
@@ -248,45 +300,28 @@ void server::handle_connection(int socket)
 
     format_http_request(request);
     http_response response = format_http_response(request);
+    get_request.clear();
     if (response.reject == false)
         router(socket, response);
     if (request.reject == true)
         cut_connection(socket);
 }
 
-/* Request format (RFC7230/3.)
-* Fills in http_request object and returns it
-* 1. start-line (request-line for request, status-line for response)
-* 2. *( header-field CRLF)
-* 3. CRLF
-* 4. optional request-body/payload
-*
-* Construct absolute URI RFC2396/3.
-*/
-http_request server::parse_request_header(int socket)
+
+bool    server::check_first_line(std::string current_line, http_request &request)
 {
-    http_request request(false);
-    request.socket = socket;
-    /* Read and store request line
-    * syntax checking for the request line happens here (RFC7230/3.1.1.)
-    */
-    char *curLine = get_next_line(socket);
-    std::string current_line(curLine);
-    free(curLine);
-    if (current_line == CRLF) /* RFC7230/3.5. In the interest of robustness... */
-    {
-        curLine = get_next_line(socket);
-        if (curLine == NULL)
-            return (http_request::reject_http_request());
-        current_line = curLine;
-        free(curLine);
-    }
-    if (current_line == "GET /directory/youp")
-        current_line += get_next_line(socket);
+    // if (current_line == CRLF) /* RFC7230/3.5. In the interest of robustness... */
+    // {
+    //     curLine = get_next_line(socket);
+    //     if (curLine == NULL)
+    //         return (http_request::reject_http_request());
+    //     current_line = curLine;
+    //     free(curLine);
+    // }
     LOG("current_line: " << current_line);
     LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
-        return (http_request::reject_http_request()); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
+        return (false); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     request.scheme = "http";
     std::vector<std::string> words = conf_file::get_words(current_line);
     request.method_token = words[0];
@@ -303,7 +338,63 @@ http_request server::parse_request_header(int socket)
     // LOG("Target: '" << request.target << "'");
     // LOG("Protocol version: '" << request.protocol_version << "'");
 
-    bool first_header_field = true;
+    return true;
+}
+
+bool            server::check_prebody(std::string current_line,  http_request &request)
+{
+    bool    first_header_field = 1;
+
+    std::cout << "header field: " << current_line;
+    if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
+        if (header_whitespace_characters.count(current_line[0]))
+            return (0); /* 400 bad request (syntax error) */
+        first_header_field = false;
+    }
+    if (match(current_line, HEADER_FIELD_PATTERN) == false)
+        return (0); /* 400 bad request (syntax error) */
+    std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
+    if (field_name == "Host" && request.header_fields.count(field_name))
+        return (0); /* RFC7230/5.4. */
+    std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
+    // LOG("field_value_untruncated: " << field_value_untruncated);
+    std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
+    if (request.header_fields.count(field_name)) /* append field-name with a preceding comma */
+        request.header_fields[field_name] += "," + field_value;
+    else
+        request.header_fields[field_name] = field_value; 
+    return true;
+}
+
+
+
+/* Request format (RFC7230/3.)
+* Fills in http_request object and returns it
+* 1. start-line (request-line for request, status-line for response)
+* 2. *( header-field CRLF)
+* 3. CRLF
+* 4. optional request-body/payload
+*
+* Construct absolute URI RFC2396/3.
+*/
+http_request server::parse_request_header(int socket)
+{  
+    read_request(socket);
+    if (finished_reading == false)
+        return (http_request::chunked_http_request());    
+    http_request request(false);
+    request.socket = socket;
+    if (check_first_line(get_request[0], request) == false)
+        return (http_request::reject_http_request());
+
+    LOG("Method token: '" << request.method_token << "'");
+    LOG("Target: '" << request.target << "'");
+    LOG("Protocol version: '" << request.protocol_version << "'");
+
+    /* Read and store request line
+    * syntax checking for the request line happens here (RFC7230/3.1.1.)
+    */
+
     /* Read and store header fields
     * store each key value pair in 'header_fields'
     * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
@@ -312,37 +403,22 @@ http_request server::parse_request_header(int socket)
     * bad (BWS) and optional whitespaces (OWS) are getting removed here
     */
     /* Header field format (RFC7230/3.2.)
-    * field-name ":" OWS field-value OWS
+    * field-name ":" OWS field-value OWS 
     */
-    while ((curLine = get_next_line(socket)))
+
+    size_t i = 1;
+    std::string current_line;
+    while (true)
     {
-        current_line = curLine;
-        free(curLine);
-        LOG("header field: " << current_line);
-        if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
-            if (header_whitespace_characters.count(current_line[0]))
-                return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
-            first_header_field = false;
-        }
-        if (current_line == "\r\n" || current_line == "\n" || current_line == "\r")
+        if (get_request[i] == "\r\n" || get_request[i] == "\n" || get_request[i] == "\r")
             break ; /* end of header */
-        if (match(current_line, HEADER_FIELD_PATTERN) == false)
-            return (http_request::reject_http_request()); /* 400 bad request (syntax error) */
-        std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
-        if (field_name == "Host" && request.header_fields.count(field_name))
-            return (http_request::reject_http_request()); /* RFC7230/5.4. */
-        // PRINT_HERE();
-        std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
-        // PRINT_HERE();
-        // LOG("field_value_untruncated: " << field_value_untruncated);
-        // PRINT_HERE();
-        std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
-        // PRINT_HERE();
-        if (request.header_fields.count(field_name)) /* append field-name with a preceding comma */
-            request.header_fields[field_name] += "," + field_value;
-        else
-            request.header_fields[field_name] = field_value;
+        if (check_prebody(get_request[i], request) == false)
+            return (http_request::reject_http_request());
+        ++i;
     }
+
+    PRINT_HERE();
+
     if (request.header_fields.count("Host") == 0)
         return (http_request::reject_http_request());
     request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
@@ -356,11 +432,16 @@ http_request server::parse_request_header(int socket)
     // LOG("Net path: " << request.net_path);
     // LOG("Query: " << request.query);
     // LOG("URI: " << request.URI);
-    while ((curLine = get_next_line(socket)))
+
+    while (i < get_request.size())
     {
-        request.payload += std::string(curLine);
-        free(curLine);
+        request.payload += get_request[i];
+        i++;
     }
+    // ----
+
+    PRINT_HERE();
+
     // LOG("Payload: " << request.payload);
 
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
@@ -571,6 +652,7 @@ http_response server::format_http_response(const http_request& request)
     payload_header_fields(request, response);
 
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
+    LOG("\n-------------------------- NEW REQUEST -------------------------------\n");
 
     /* add payload */
     if (response.payload.size() == 0 && match(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
@@ -643,7 +725,6 @@ http_response server::format_http_response(const http_request& request)
     }
     else
         response.payload = cached_resources["/error"].content;
-
     return (response);
 }
 

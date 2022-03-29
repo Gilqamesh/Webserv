@@ -21,3 +21,8 @@ http_request http_request::reject_http_request(void)
 {
     return (http_request(true));
 }
+
+http_request http_request::chunked_http_request(void)
+{
+    return (http_request(false));
+}

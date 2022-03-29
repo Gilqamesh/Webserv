@@ -34,21 +34,30 @@ typedef struct s_location t_location;
 class server
 {
 private:
-    int                                             server_socket_fd;
-    int                                             server_port;
-    int                                             server_backlog; /* server_socket_fd - backlog */
-    std::map<std::string, resource>                 cached_resources; /* route - resource */
-    std::map<int, int>                              *cgi_responses; /* cgi socket - client socket */
-    // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
-    /* constants */
-    std::set<std::string>                           accepted_request_methods;
-    std::set<char>                                  header_whitespace_characters;
-    std::string                                     http_version;
-    unsigned long                                   start_timestamp;
-    std::string                                     hostname; /* ipv4 */
-    int                                             current_number_of_connections;
-    EventHandler                                    *events;
+    int                                 server_socket_fd;
+    int                                 server_port;
+    int                                 server_backlog; /* server_socket_fd - backlog */
+    std::map<std::string, resource>     cached_resources; /* route - resource */
+    std::map<int, int>                  *cgi_responses; /* cgi socket - client socket */
+    // std::map<int, unsigned long>        connected_sockets_map; /* socket - timestamp */
+    /* constants */ 
+    std::set<std::string>               accepted_request_methods;
+    std::set<char>                      header_whitespace_characters;
+    std::string                         http_version;
+    unsigned long                       start_timestamp;
+    std::string                         hostname; /* ipv4 */
+    int                                 current_number_of_connections;
+    EventHandler                        *events;
+
+    std::vector<std::string>            get_request;
+    bool                                finished_reading;
+    std::string                         method;
+    bool                                first_read;
 public:
+
+    void            read_request(int fd);
+    bool            check_first_line(std::string, http_request&);
+    bool            check_prebody(std::string, http_request&);
 
     void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events,
                                 const t_server &configuration);
