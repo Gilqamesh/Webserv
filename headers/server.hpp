@@ -55,6 +55,10 @@ private:
     bool                                finished_reading;
     bool                                consider_body;
     bool                                getting_body;
+    bool                                header_is_parsed;
+    bool                                chunked;
+    int                                 content_length;
+    std::string                         request_body;
     std::vector<char>                   main_vec;
 public:
 

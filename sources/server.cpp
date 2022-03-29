@@ -8,20 +8,20 @@
 
 void    server::read_request(int fd)
 {   
-    // LOG("\nfinished_readding = " << finished_reading);
-    // LOG("consider_body     = " << consider_body);
-    // LOG("getting_body      = " << getting_body);
+    LOG("\nfinished_readding = " << finished_reading);
+    LOG("consider_body     = " << consider_body);
+    LOG("getting_body      = " << getting_body);
     char    *char_line = NULL;
     // std::vector<char> buffer(4096);
     std::string  line;
 
     // read(fd, buffer.begin().base(), 4096);
     char_line = get_next_line(fd);
-    // LOG("Line - " << char_line);
-    // std::cout << "ASCII - ";
-    // for (size_t i = 0; i < strlen(char_line); ++i)
-    //     printf("%d", char_line[i]);
-    // LOG("");
+    LOG("Line - " << char_line);
+    std::cout << "ASCII - ";
+    for (size_t i = 0; i < strlen(char_line); ++i)
+        printf("%d", char_line[i]);
+    LOG("");
     line = char_line;
     // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
     //     line += *it;
@@ -41,69 +41,94 @@ void    server::read_request(int fd)
         else
             keep reading until header is parsed
     */
+    if (line.find("Transfer-Encoding: chunked") != std::string::npos)
+        chunked = true;
+    if (line.find("Content-Length") != std::string::npos)
+    {
+        content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
+    }
     if (consider_body == false)
     {       
-        if (line.find("Transfer-Encoding: chunked") != std::string::npos || line.find("Content-Length") != std::string::npos) 
+        if (line.find("Transfer-Encoding: chunked") != std::string::npos || line.find("Content-Length") != std::string::npos)
             consider_body = true;
+    }
 
-    }
-    if (line == "\r\n" || line == "\r\n\r\n")
+    if (header_is_parsed == false)
     {
-        if (consider_body == false)
-            finished_reading = true;
-        if (consider_body == true && getting_body == false)
-            getting_body = true;
-        else if (consider_body == true && getting_body == true)
-            finished_reading = true;
-        get_request.push_back(line);
-    }
-    // else if (line == "\r")
-    // {
-    //     if (consider_body == false)
-    //         finished_reading = true;
-    //     if (consider_body == true && getting_body == false)
-    //         getting_body = true;
-    //     else if (consider_body == true && getting_body == true)
-    //         finished_reading = true;
-    //     char_line = get_next_line(fd);
-    //         // return /* http_request::bad_request */;
-    //     LOG("Char line: ");
-    //     for (size_t i = 0; i < strlen(char_line); ++i)
-    //         printf("%d", char_line[i]);
-    //     line = char_line;
-    //     get_request.back() += line;
-    // }
-    else
-    {
-        if (get_request.size() == 0)
-            get_request.push_back(line);
-        else
+        if (line == "\r\n" || line == "\r\n\r\n")
         {
-            if (get_request.back().back() != '\n')
-            {
-                get_request.back() += line;
-            }
-            else
-                get_request.push_back(line);
-        }
-        if (get_request.back() == "\r\n" || get_request.back() == "\r\n\r\n")
-        {
+            header_is_parsed = true;
+            LOG("chunked = " << chunked);
+            if (chunked == false && content_length == 0)
+                finished_reading = true;
             if (consider_body == false)
                 finished_reading = true;
             if (consider_body == true && getting_body == false)
                 getting_body = true;
             else if (consider_body == true && getting_body == true)
                 finished_reading = true;
+            get_request.push_back(line);
         }
-        // std::cout << "ASCII2 - ";
-        // for (size_t i = 0; i < line.size(); ++i)
-        //     printf("%d", line[i]);
-        // LOG("");
+        // else if (line == "\r")
+        // {
+        //     if (consider_body == false)
+        //         finished_reading = true;
+        //     if (consider_body == true && getting_body == false)
+        //         getting_body = true;
+        //     else if (consider_body == true && getting_body == true)
+        //         finished_reading = true;
+        //     char_line = get_next_line(fd);
+        //         // return /* http_request::bad_request */;
+        //     LOG("Char line: ");
+        //     for (size_t i = 0; i < strlen(char_line); ++i)
+        //         printf("%d", char_line[i]);
+        //     line = char_line;
+        //     get_request.back() += line;
+        // }
+        else
+        {
+            if (get_request.size() == 0)
+                get_request.push_back(line);
+            else
+            {
+                if (get_request.back().back() != '\n')
+                {
+                    get_request.back() += line;
+                }
+                else
+                {
+                    get_request.push_back(line);
+                }
+            }
+            if (get_request.back() == "\r\n" || get_request.back() == "\r\n\r\n")
+            {
+                if (consider_body == false)
+                    finished_reading = true;
+                if (consider_body == true && getting_body == false)
+                    getting_body = true;
+                else if (consider_body == true && getting_body == true)
+                    finished_reading = true;
+            }
+            // std::cout << "ASCII2 - ";
+            // for (size_t i = 0; i < line.size(); ++i)
+            //     printf("%d", line[i]);
+            // LOG("");
+        }
     }
-    // LOG("\nget_request.back()  = " << get_request.back());
-    // LOG("finished_readding_end = " << finished_reading);
-    // LOG("consider_body_end     = " << consider_body);
-    // LOG("getting_body_end      = " << getting_body);
+    else
+    {
+        if (chunked == false)
+        {
+            if (request_body.size() < (size_t)content_length)
+                request_body += line;
+            else
+                finished_reading = true;
+        }
+    }
+    LOG("\nget_request.back()  = " << get_request.back());
+    LOG("finished_readding_end = " << finished_reading);
+    LOG("consider_body_end     = " << consider_body);
+    LOG("getting_body_end      = " << getting_body);
 }
 
 void server::initialize_constants(void)
@@ -134,6 +159,9 @@ const t_server &configuration)
     first_read = false;
     consider_body = false;
     getting_body = false;
+    header_is_parsed = false;
+    content_length = 0;
+    chunked = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -342,11 +370,17 @@ void server::handle_connection(int socket)
 {
     http_request request = parse_request_header(socket);
     if (request.reject == false && finished_reading == false)
+    {
+        events->addReadEvent(socket);
         return ;
+    }
     finished_reading = false; 
     first_read = false;
     consider_body = false;
     getting_body = false;
+    header_is_parsed = false;
+    chunked = false;
+    request_body.clear();
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
@@ -376,8 +410,8 @@ bool    server::check_first_line(std::string current_line, http_request &request
     //     current_line = curLine;
     //     free(curLine);
     // }
-    LOG("current_line: " << current_line);
-    LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
+    // LOG("current_line: " << current_line);
+    // LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
         return (false); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     request.scheme = "http";
@@ -390,7 +424,7 @@ bool    server::check_first_line(std::string current_line, http_request &request
     constructedTarget = isAllowedDirectory(request.target);
     if (constructedTarget.size() && fileExists(constructedTarget) == 2 && request.target.back() != '/')
         request.target += "/";
-    LOG("Request.target: " << request.target << ", protocol version: " + request.protocol_version);
+    // LOG("Request.target: " << request.target << ", protocol version: " + request.protocol_version);
 
     // LOG("Method token: '" << request.method_token << "'");
     // LOG("Target: '" << request.target << "'");
@@ -403,7 +437,7 @@ bool            server::check_prebody(std::string current_line,  http_request &r
 {
     bool    first_header_field = 1;
 
-    std::cout << "header field: " << current_line;
+    // std::cout << "header field: " << current_line;
     if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
         if (header_whitespace_characters.count(current_line[0]))
             return (0); /* 400 bad request (syntax error) */
@@ -437,18 +471,17 @@ bool            server::check_prebody(std::string current_line,  http_request &r
 */
 http_request server::parse_request_header(int socket)
 {  
-    PRINT_HERE();
     read_request(socket);
     if (finished_reading == false)
-        return (http_request::chunked_http_request());    
+        return (http_request::chunked_http_request());
     http_request request(false);
     request.socket = socket;
     if (check_first_line(get_request[0], request) == false)
         return (http_request::reject_http_request());
 
-    LOG("Method token: '" << request.method_token << "'");
-    LOG("Target: '" << request.target << "'");
-    LOG("Protocol version: '" << request.protocol_version << "'");
+    // LOG("Method token: '" << request.method_token << "'");
+    // LOG("Target: '" << request.target << "'");
+    // LOG("Protocol version: '" << request.protocol_version << "'");
 
     /* Read and store request line
     * syntax checking for the request line happens here (RFC7230/3.1.1.)
@@ -494,7 +527,6 @@ http_request server::parse_request_header(int socket)
         request.payload += get_request[i];
     // ----
 
-    // PRINT_HERE();
 
     // LOG("Payload: " << request.payload);
 
@@ -637,20 +669,40 @@ http_response server::format_http_response(const http_request& request)
 {
     http_response response;
     response.http_version = http_version;
-    LOG("cached_resources.count(request.target) = " << cached_resources.count(request.target));
-    LOG("cached resource:");
-    for (std::map<std::string, resource>::iterator it = cached_resources.begin(); it != cached_resources.end(); ++it)
+    // LOG("cached_resources.count(request.target) = " << cached_resources.count(request.target));
+    // LOG("cached resource:");
+    // for (std::map<std::string, resource>::iterator it = cached_resources.begin(); it != cached_resources.end(); ++it)
+    // {
+    //     LOG("route = " << it->first);
+    //     // LOG("resource = " << it->second);
+    // }
+    LOG("request.method_token :" << request.method_token);
+    if (request.method_token == "POST")
     {
-        LOG("route = " << it->first);
-        // LOG("resource = " << it->second);
+        int cgi_pipe[2];
+        if (pipe(cgi_pipe) == -1)
+            TERMINATE("pipe failed");
+        if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        /* write request payload into socket */
+        (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+        CGI script(cgi_pipe, request.payload);
+        add_script_meta_variables(script, request);
+        script.execute();
+        close(cgi_pipe[WRITE_END]);
+        /* register an event for this socket */
+        events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
+        return (http_response::reject_http_response());
     }
+
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         std::string constructedPath;
         if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
-            PRINT_HERE();
             cached_resources[request.target].allowed_methods.insert("GET");
             cached_resources[request.target].is_static = true;
             /* add this to the cached_resources */
@@ -736,9 +788,6 @@ http_response server::format_http_response(const http_request& request)
 
     payload_header_fields(request, response);
 
-    LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
-    LOG("\n-------------------------- NEW REQUEST -------------------------------\n");
-
     /* add payload */
     if (response.payload.size() == 0 && match(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
     {
@@ -810,6 +859,7 @@ http_response server::format_http_response(const http_request& request)
     }
     else
         response.payload = cached_resources["/error"].content;
+    LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     return (response);
 }
 
