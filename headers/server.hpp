@@ -49,14 +49,13 @@ private:
     int                                 current_number_of_connections;
     EventHandler                        *events;
 
-    std::vector<std::string>            get_request;
+    std::vector<std::string>            headerFields;
     std::string                         method;
-    bool                                first_read;
+    bool                                found_content_length;
     bool                                finished_reading;
-    bool                                consider_body;
-    bool                                getting_body;
     bool                                header_is_parsed;
     bool                                chunked;
+    bool                                is_post;
     int                                 content_length;
     std::string                         request_body;
     std::vector<char>                   main_vec;
@@ -91,7 +90,7 @@ private:
     void            request_control_TE(http_request &request);
 
     /* format http response and its control functions */
-    http_response   format_http_response(const http_request& request);
+    http_response   format_http_response(http_request& request);
     void            response_control_handle_age(http_response &response);
     void            response_control_cache_control(http_response &response);
     void            response_control_expires(http_response &response);

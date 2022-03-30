@@ -8,127 +8,116 @@
 
 void    server::read_request(int fd)
 {   
-    LOG("\nfinished_readding = " << finished_reading);
-    LOG("consider_body     = " << consider_body);
-    LOG("getting_body      = " << getting_body);
-    char    *char_line = NULL;
-    // std::vector<char> buffer(4096);
-    std::string  line;
-
-    // read(fd, buffer.begin().base(), 4096);
-    char_line = get_next_line(fd);
-    LOG("Line - " << char_line);
-    std::cout << "ASCII - ";
-    for (size_t i = 0; i < strlen(char_line); ++i)
-        printf("%d", char_line[i]);
-    LOG("");
-    line = char_line;
-    // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
-    //     line += *it;
-    // line += '\0';
-    // LOG("line: " << line);
-    // std::cout << "ASCII - ";
-    // for (size_t i = 0; i < line.size(); ++i)
-    //     printf("%d", line[i]);
-    // LOG(line);
-    free(char_line);
-    char_line = NULL;
-    /*
-        if we have \r\n\r\n -> parsed entire header
-            1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
-            2. Content-Length -> read until whole length is read
-            3. Return with 400
-        else
-            keep reading until header is parsed
-    */
-    if (line.find("Transfer-Encoding: chunked") != std::string::npos)
-        chunked = true;
-    if (line.find("Content-Length") != std::string::npos)
-    {
-        content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
-    }
-    if (consider_body == false)
-    {       
-        if (line.find("Transfer-Encoding: chunked") != std::string::npos || line.find("Content-Length") != std::string::npos)
-            consider_body = true;
-    }
 
     if (header_is_parsed == false)
     {
+        // LOG("\nfinished_readding = " << finished_reading);
+        // LOG("consider_body     = " << consider_body);
+        // LOG("getting_body      = " << getting_body);
+        char    *char_line = NULL;
+        // std::vector<char> buffer(4096);
+        std::string  line;
+
+        // read(fd, buffer.begin().base(), 4096);
+        char_line = get_next_line(fd);
+        // LOG("Line - " << char_line);
+        // std::cout << "ASCII - ";
+        // for (size_t i = 0; i < strlen(char_line); ++i)
+        //     printf("%d", char_line[i]);
+        // LOG("");
+        line = char_line;
+        // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
+        //     line += *it;
+        // line += '\0';
+        // LOG("line: " << line);
+        // std::cout << "ASCII - ";
+        // for (size_t i = 0; i < line.size(); ++i)
+        //     printf("%d ", line[i]);
+        // LOG(line);
+        free(char_line);
+        char_line = NULL;
+        /*
+            if we have \r\n\r\n -> parsed entire header
+                1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
+                2. Content-Length -> read until whole length is read
+                3. Return with 400
+            else
+                keep reading until header is parsed
+        */
+        if (is_post == false && line.find("POST") != std::string::npos)
+            is_post = true;
+        if (line.find("Transfer-Encoding: chunked") != std::string::npos)
+            chunked = true;
+        if (line.find("Content-Length") != std::string::npos)
+        {
+            found_content_length = true;
+            // content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
+        }
         if (line == "\r\n" || line == "\r\n\r\n")
         {
             header_is_parsed = true;
-            LOG("chunked = " << chunked);
-            if (chunked == false && content_length == 0)
+            if (is_post == true && chunked == false && found_content_length == false)
+            {
                 finished_reading = true;
-            if (consider_body == false)
+                headerFields.push_back(line);
+                return ;
+            }
+            if (found_content_length && content_length == 0)
                 finished_reading = true;
-            if (consider_body == true && getting_body == false)
-                getting_body = true;
-            else if (consider_body == true && getting_body == true)
+            headerFields.push_back(line);
+            if (chunked == false && content_length == false)
                 finished_reading = true;
-            get_request.push_back(line);
         }
-        // else if (line == "\r")
-        // {
-        //     if (consider_body == false)
-        //         finished_reading = true;
-        //     if (consider_body == true && getting_body == false)
-        //         getting_body = true;
-        //     else if (consider_body == true && getting_body == true)
-        //         finished_reading = true;
-        //     char_line = get_next_line(fd);
-        //         // return /* http_request::bad_request */;
-        //     LOG("Char line: ");
-        //     for (size_t i = 0; i < strlen(char_line); ++i)
-        //         printf("%d", char_line[i]);
-        //     line = char_line;
-        //     get_request.back() += line;
-        // }
         else
         {
-            if (get_request.size() == 0)
-                get_request.push_back(line);
+            if (headerFields.size() == 0)
+                headerFields.push_back(line);
             else
             {
-                if (get_request.back().back() != '\n')
+                if (headerFields.back().back() != '\n')
                 {
-                    get_request.back() += line;
+                    headerFields.back() += line;
                 }
                 else
                 {
-                    get_request.push_back(line);
+                    headerFields.push_back(line);
                 }
             }
-            if (get_request.back() == "\r\n" || get_request.back() == "\r\n\r\n")
+            if (headerFields.back() == "\r\n" || headerFields.back() == "\r\n\r\n")
             {
-                if (consider_body == false)
+                header_is_parsed = true;
+                if (is_post == true && chunked == false && found_content_length == false)
+                {
                     finished_reading = true;
-                if (consider_body == true && getting_body == false)
-                    getting_body = true;
-                else if (consider_body == true && getting_body == true)
+                    return ;
+                }
+                if (chunked == false && content_length == 0)
                     finished_reading = true;
             }
-            // std::cout << "ASCII2 - ";
-            // for (size_t i = 0; i < line.size(); ++i)
-            //     printf("%d", line[i]);
-            // LOG("");
         }
     }
     else
     {
-        if (chunked == false)
-        {
+        char *char_line = get_next_line(fd);
+        std::string line(char_line);
+        if (char_line != NULL)
+            line.pop_back(); /* remove /n */
+        free(char_line);
+        char_line = NULL;
+        if (chunked == false) {
             if (request_body.size() < (size_t)content_length)
                 request_body += line;
             else
                 finished_reading = true;
+        } else {
+            finished_reading = true;
         }
     }
-    LOG("\nget_request.back()  = " << get_request.back());
+    // LOG("Request header fields:");
+    // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+    //     LOG(*it);
     LOG("finished_readding_end = " << finished_reading);
-    LOG("consider_body_end     = " << consider_body);
-    LOG("getting_body_end      = " << getting_body);
+    // LOG("header_is_parsed      = " << header_is_parsed);
 }
 
 void server::initialize_constants(void)
@@ -156,10 +145,9 @@ const t_server &configuration)
     events = eventQueue;
     locations = configuration.locations;
     finished_reading = false;
-    first_read = false;
-    consider_body = false;
-    getting_body = false;
     header_is_parsed = false;
+    found_content_length = false;
+    is_post = false;
     content_length = 0;
     chunked = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
@@ -370,16 +358,18 @@ void server::handle_connection(int socket)
 {
     http_request request = parse_request_header(socket);
     if (request.reject == false && finished_reading == false)
-    {
-        events->addReadEvent(socket);
         return ;
+    if (is_post == true && found_content_length == false && chunked == false)
+    {
+        PRINT_HERE();
+        http_response response = http_response::reject_http_response();
+        router(socket, response);
+        cut_connection(socket);
     }
     finished_reading = false; 
-    first_read = false;
-    consider_body = false;
-    getting_body = false;
     header_is_parsed = false;
     chunked = false;
+    is_post = false;
     request_body.clear();
     struct sockaddr addr;
     socklen_t socklen;
@@ -392,7 +382,7 @@ void server::handle_connection(int socket)
 
     format_http_request(request);
     http_response response = format_http_response(request);
-    get_request.clear();
+    headerFields.clear();
     if (response.reject == false)
         router(socket, response);
     if (request.reject == true)
@@ -474,10 +464,20 @@ http_request server::parse_request_header(int socket)
     read_request(socket);
     if (finished_reading == false)
         return (http_request::chunked_http_request());
+
+    // LOG("Request header fields:");
+    // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+    //     std::cout << (*it);
+    // LOG("request_body:");
+    // LOG(request_body);
+    // LOG("");
+    
     http_request request(false);
     request.socket = socket;
-    if (check_first_line(get_request[0], request) == false)
+    request.payload = request_body;
+    if (check_first_line(headerFields[0], request) == false)
         return (http_request::reject_http_request());
+    PRINT_HERE();
 
     // LOG("Method token: '" << request.method_token << "'");
     // LOG("Target: '" << request.target << "'");
@@ -502,12 +502,13 @@ http_request server::parse_request_header(int socket)
     std::string current_line;
     while (true)
     {
-        if (get_request[i] == "\r\n" || get_request[i] == "\n" || get_request[i] == "\r")
+        if (headerFields[i] == "\r\n" || headerFields[i] == "\n" || headerFields[i] == "\r")
             break ; /* end of header */
-        if (check_prebody(get_request[i], request) == false)
+        if (check_prebody(headerFields[i], request) == false)
             return (http_request::reject_http_request());
         ++i;
     }
+    PRINT_HERE();
 
     if (request.header_fields.count("Host") == 0)
         return (http_request::reject_http_request());
@@ -522,11 +523,7 @@ http_request server::parse_request_header(int socket)
     // LOG("Net path: " << request.net_path);
     // LOG("Query: " << request.query);
     // LOG("URI: " << request.URI);
-
-    for (; i < get_request.size(); ++i)
-        request.payload += get_request[i];
     // ----
-
 
     // LOG("Payload: " << request.payload);
 
@@ -665,42 +662,45 @@ std::string server::isAllowedDirectory(const std::string &target)
 *       either server static resource
 *       or execute script with CGI to serve dynamically constructed resource
 */
-http_response server::format_http_response(const http_request& request)
+http_response server::format_http_response(http_request& request)
 {
     http_response response;
     response.http_version = http_version;
-    // LOG("cached_resources.count(request.target) = " << cached_resources.count(request.target));
-    // LOG("cached resource:");
-    // for (std::map<std::string, resource>::iterator it = cached_resources.begin(); it != cached_resources.end(); ++it)
-    // {
-    //     LOG("route = " << it->first);
-    //     // LOG("resource = " << it->second);
-    // }
-    LOG("request.method_token :" << request.method_token);
-    if (request.method_token == "POST")
-    {
-        int cgi_pipe[2];
-        if (pipe(cgi_pipe) == -1)
-            TERMINATE("pipe failed");
-        if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
-            TERMINATE("fcntl failed");
-        if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
-            TERMINATE("fcntl failed");
-        /* write request payload into socket */
-        (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
-        CGI script(cgi_pipe, request.payload);
-        add_script_meta_variables(script, request);
-        script.execute();
-        close(cgi_pipe[WRITE_END]);
-        /* register an event for this socket */
-        events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
-        return (http_response::reject_http_response());
-    }
 
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
-    } else if (cached_resources.count(request.target) == 0) { /* Not Found */
+    }  else if (cached_resources.count(request.target) == 0) { /* Not Found */
+        if (request.method_token == "POST" || request.method_token == "PUT")
+        {
+                /* RFC7231/4.3.3.
+            * CGI for example comes here
+            * if one or more resources has been created, status code needs to be 201 with "Created"
+            *   with "Location" header field that provides an identifier for the primary resource created
+            *   and a representation that describes the status of the request while referring to the new resource(s).
+            * If no resources are created, respond with 200 that containts the result and a "Content-Location"
+            *   header field that has the same value as the POST's effective request URI
+            * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
+            */
+        int cgi_pipe[2];
+            if (pipe(cgi_pipe) == -1)
+                TERMINATE("pipe failed");
+            if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+                TERMINATE("fcntl failed");
+            if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+                TERMINATE("fcntl failed");
+            /* write request payload into socket */
+            (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+            CGI script(cgi_pipe, &request);
+            add_script_meta_variables(script, request);
+            script.execute();
+            close(cgi_pipe[WRITE_END]);
+            /* register an event for this socket */
+            int *a = (int *)malloc(sizeof(int));
+            *a = cgi_pipe[READ_END];
+            events->addReadEvent(cgi_pipe[READ_END], a);
+            return (http_response::reject_http_response());
+        }
         std::string constructedPath;
         if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
             cached_resources[request.target].allowed_methods.insert("GET");
@@ -759,18 +759,7 @@ http_response server::format_http_response(const http_request& request)
             response.status_code = "404";
             response.reason_phrase = "Not Found";
         }
-    } else if (request.method_token == "POST") { /* Target resource needs to process the request */
-        /* RFC7231/4.3.3.
-        * CGI for example comes here
-        * if one or more resources has been created, status code needs to be 201 with "Created"
-        *   with "Location" header field that provides an identifier for the primary resource created
-        *   and a representation that describes the status of the request while referring to the new resource(s).
-        * If no resources are created, respond with 200 that containts the result and a "Content-Location"
-        *   header field that has the same value as the POST's effective request URI
-        * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
-        */  
-    } 
-
+    }
 
     /* Control Data RFC7231/7.1. */
     /* TODO: if payload already exists, these need to check for that
@@ -810,7 +799,7 @@ http_response server::format_http_response(const http_request& request)
             TERMINATE("fcntl failed");
         /* write request payload into socket */
         (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
-        CGI script(cgi_pipe, request.payload);
+        CGI script(cgi_pipe, &request);
         add_script_meta_variables(script, request);
         script.execute();
         close(cgi_pipe[WRITE_END]);
@@ -977,10 +966,15 @@ void server::payload_header_fields(const http_request &request, http_response &r
 void server::router(int socket, const http_response &response)
 {
     std::string message = response.http_version + " " + response.status_code + " " + response.reason_phrase + "\n";
+    // LOG("\nresponse message:");
     for (std::map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
+    {
         message += cit->first + ":" + cit->second + "\n";
+        // LOG(message);
+    }
     message += "\n";
     message += response.payload;
+    // LOG(message);
     send(socket, message.c_str(), message.length(), 0);
 }
 
@@ -999,7 +993,7 @@ void server::send_timeout(int socket)
 void server::add_script_meta_variables(CGI &script, const http_request &request)
 {
     // script.add_meta_variable("AUTH_TYPE", "");
-    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
+    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request_body.length()));
     if (request.header_fields.count("Content-Type"))
         script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
     script.add_meta_variable("PATH_INFO", cached_resources[request.target].path);
@@ -1008,7 +1002,7 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    script.add_meta_variable("PATH_TRANSLATED", cwd + request.abs_path);
+    script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);

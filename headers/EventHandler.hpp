@@ -27,7 +27,7 @@ public:
         return (nOfEvents);
     }
 
-    const struct kevent &operator[](unsigned int index) const
+    struct kevent &operator[](unsigned int index)
     {
         if (index >= MAX_EVENTS)
             throw (std::out_of_range("Requested event is outside of the range of the event queue"));

@@ -2,8 +2,8 @@
 #include "CGI.hpp"
 #include <vector>
 
-CGI::CGI(int pipe[2], const std::string &payload)
-    : m_payload(payload)
+CGI::CGI(int pipe[2], http_request *httpRequest)
+    : request(httpRequest)
 {
     m_pipe[0] = pipe[0];
     m_pipe[1] = pipe[1];
@@ -29,58 +29,63 @@ void CGI::execute(void)
         TERMINATE("fork failed");
     if (pid == 0)
     {
-        LOG_E(__LINE__);
         close(m_pipe[READ_END]);
-        LOG_E(__LINE__);
-        int tmp_pipe[2];
-        LOG_E(__LINE__);
-        if (pipe(tmp_pipe) == -1)
+        pid_t pid2;
+        int tmp_pipe2[2];
+        if (pipe(tmp_pipe2) == -1)
             TERMINATE("pipe failed");
-        LOG_E(__LINE__);
-        write(tmp_pipe[WRITE_END], m_payload.data(), m_payload.length());
-        LOG_E(__LINE__);
-        close(tmp_pipe[WRITE_END]);
-        LOG_E(__LINE__);
-        if (dup2(tmp_pipe[READ_END], STDIN_FILENO) == -1)
-            TERMINATE("dup2 failed");
-        LOG_E(__LINE__);
-        close(tmp_pipe[READ_END]);
-        LOG_E(__LINE__);
-        std::vector<char *> args;
-        LOG_E(__LINE__);
-        args.push_back(&meta_variables["PATH_TRANSLATED"].at(0));
-        LOG_E(__LINE__);
-        args.push_back(&meta_variables["PATH_INFO"].at(0));
-        LOG_E(__LINE__);
-        args.push_back(NULL);
-        LOG_E(__LINE__);
-        std::vector<char *> env;
-        LOG_E(__LINE__);
-        for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
+        if ((pid2 = fork()) == -1)
+            TERMINATE("fork failed");
+        if (pid2 == 0)
         {
-            LOG_E(__LINE__);
-            char *tmp = (char *)std::malloc(it->first.length() + it->second.length() + 2); /* 1 for =, 1 for \0 */
-            LOG_E(__LINE__);
-            tmp[it->first.length() + it->second.length() + 1] = '\0';
-            LOG_E(__LINE__);
-            memcpy(tmp, it->first.c_str(), it->first.length());
-            LOG_E(__LINE__);
-            tmp[it->first.length()] = '=';
-            LOG_E(__LINE__);
-            memcpy(tmp + it->first.length() + 1, it->second.c_str(), it->second.length());
-            LOG_E(__LINE__);
-            env.push_back(tmp);
-            LOG_E(__LINE__);
+            close(m_pipe[WRITE_END]);
+            close(tmp_pipe2[0]);
+            int tmp_pipe[2];
+            if (pipe(tmp_pipe) == -1)
+                TERMINATE("pipe failed");
+            write(tmp_pipe[WRITE_END], request->payload.data(), request->payload.length());
+            close(tmp_pipe[WRITE_END]);
+            if (dup2(tmp_pipe[READ_END], STDIN_FILENO) == -1)
+                TERMINATE("dup2 failed");
+            close(tmp_pipe[READ_END]);
+            char *arg1 = strdup(meta_variables["PATH_TRANSLATED"].c_str());
+            char **args = (char **)malloc(3 * sizeof(char *));
+            args[0] = strdup("/usr/bin/php");
+            args[1] = arg1;
+            args[2] = NULL;
+            
+            char **env = (char **)malloc(sizeof(char *) * (1 + meta_variables.size()));
+            env[meta_variables.size()] = NULL;
+            size_t index = 0;
+            for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
+            {
+                if (it->second.back() == '\n')
+                    it->second.pop_back();
+                env[index++] = strdup(std::string(it->first + "=" + it->second).c_str());
+            }
+            env[index] = NULL;
+            if (dup2(tmp_pipe2[1], STDOUT_FILENO) == -1)
+                TERMINATE("dup2 failed");
+            close(tmp_pipe2[1]);
+            // for (int i = 0; env[i] != NULL; ++i)
+            //     dprintf(STDERR_FILENO, "%s\n", env[i]);
+            // dprintf(STDERR_FILENO, "arg0: %s\n", args[0]);
+            // dprintf(STDERR_FILENO, "arg1: %s\n", args[1]);
+            if (execve(args[0], args, env) == -1)
+                TERMINATE("execve failed");
         }
-        LOG_E(__LINE__);
-        env.push_back(NULL);
-        LOG_E(__LINE__);
-        if (dup2(m_pipe[WRITE_END], STDOUT_FILENO) == -1)
-            TERMINATE("dup2 failed");
-        LOG_E(__LINE__);
+        close(tmp_pipe2[1]);
+        wait(NULL);
+        char buffer[100000];
+        buffer[100000 - 1] = '\0';
+        read(tmp_pipe2[0], buffer, 100000);
+        std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
+        cgiResponse += "Content-Type: text/html\n";
+        cgiResponse += "Content-Length: " + std::to_string(strlen(buffer)) + "\n";
+        cgiResponse += "Connection: close\n";
+        cgiResponse += "\n";
+        cgiResponse += buffer;
+        write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
         close(m_pipe[WRITE_END]);
-        LOG_E(__LINE__);
-        if (execve(&meta_variables["PATH_TRANSLATED"].at(0), args.data(), env.data()) == -1)
-            TERMINATE("execve failed");
     }
 }

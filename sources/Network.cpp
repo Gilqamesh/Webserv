@@ -1,4 +1,5 @@
 #include "Network.hpp"
+#include "http_response.hpp"
 
 void Network::initNetwork(char *file_name)
 {
@@ -53,6 +54,8 @@ void Network::runNetwork()
                 /*  */
                 cgi_responses.erase(*(int *)events[i].udata);
                 close(*(int *)events[i].udata);
+                free(events[i].udata);
+                events[i].udata = NULL;
                 continue ;
             }
             if (servers.count(fd)) /* if 'fd' is a server socket -> accept connection */
