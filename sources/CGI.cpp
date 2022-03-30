@@ -39,7 +39,7 @@ void CGI::execute(void)
         if (pid2 == 0)
         {
             close(m_pipe[WRITE_END]);
-            close(tmp_pipe2[0]);
+            close(tmp_pipe2[READ_END]);
             int tmp_pipe[2];
             if (pipe(tmp_pipe) == -1)
                 TERMINATE("pipe failed");
@@ -64,9 +64,9 @@ void CGI::execute(void)
                 env[index++] = strdup(std::string(it->first + "=" + it->second).c_str());
             }
             env[index] = NULL;
-            if (dup2(tmp_pipe2[1], STDOUT_FILENO) == -1)
+            if (dup2(tmp_pipe2[WRITE_END], STDOUT_FILENO) == -1)
                 TERMINATE("dup2 failed");
-            close(tmp_pipe2[1]);
+            close(tmp_pipe2[WRITE_END]);
             // for (int i = 0; env[i] != NULL; ++i)
             //     dprintf(STDERR_FILENO, "%s\n", env[i]);
             // dprintf(STDERR_FILENO, "arg0: %s\n", args[0]);
@@ -74,11 +74,11 @@ void CGI::execute(void)
             if (execve(args[0], args, env) == -1)
                 TERMINATE("execve failed");
         }
-        close(tmp_pipe2[1]);
+        close(tmp_pipe2[WRITE_END]);
         wait(NULL);
-        char buffer[100000];
-        buffer[100000 - 1] = '\0';
-        read(tmp_pipe2[0], buffer, 100000);
+        char buffer[10000];
+        buffer[10000 - 1] = '\0';
+        read(tmp_pipe2[READ_END], buffer, 10000);
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
         cgiResponse += "Content-Length: " + std::to_string(strlen(buffer)) + "\n";
@@ -87,5 +87,6 @@ void CGI::execute(void)
         cgiResponse += buffer;
         write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
         close(m_pipe[WRITE_END]);
+        exit(0);
     }
 }

@@ -116,7 +116,7 @@ void    server::read_request(int fd)
     // LOG("Request header fields:");
     // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
     //     LOG(*it);
-    LOG("finished_readding_end = " << finished_reading);
+    // LOG("finished_readding_end = " << finished_reading);
     // LOG("header_is_parsed      = " << header_is_parsed);
 }
 
@@ -365,6 +365,7 @@ void server::handle_connection(int socket)
         http_response response = http_response::reject_http_response();
         router(socket, response);
         cut_connection(socket);
+        return ;
     }
     finished_reading = false; 
     header_is_parsed = false;
@@ -380,10 +381,10 @@ void server::handle_connection(int socket)
     request.hostname = buffer;
     request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
 
-    format_http_request(request);
     http_response response = format_http_response(request);
+    PRINT_HERE();
     headerFields.clear();
-    if (response.reject == false)
+    if (response.handled_by_cgi == false)
         router(socket, response);
     if (request.reject == true)
         cut_connection(socket);
@@ -402,6 +403,7 @@ bool    server::check_first_line(std::string current_line, http_request &request
     // }
     // LOG("current_line: " << current_line);
     // LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
+    LOG("current line: " << current_line);
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
         return (false); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     request.scheme = "http";
@@ -476,8 +478,10 @@ http_request server::parse_request_header(int socket)
     request.socket = socket;
     request.payload = request_body;
     if (check_first_line(headerFields[0], request) == false)
+    {
+        PRINT_HERE();
         return (http_request::reject_http_request());
-    PRINT_HERE();
+    }
 
     // LOG("Method token: '" << request.method_token << "'");
     // LOG("Target: '" << request.target << "'");
@@ -505,13 +509,18 @@ http_request server::parse_request_header(int socket)
         if (headerFields[i] == "\r\n" || headerFields[i] == "\n" || headerFields[i] == "\r")
             break ; /* end of header */
         if (check_prebody(headerFields[i], request) == false)
+        {
+            PRINT_HERE();
             return (http_request::reject_http_request());
+        }
         ++i;
     }
-    PRINT_HERE();
 
     if (request.header_fields.count("Host") == 0)
+    {
+        PRINT_HERE();
         return (http_request::reject_http_request());
+    }
     request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
     request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
     if (request.target.find_first_of('?') != std::string::npos)
@@ -670,10 +679,10 @@ http_response server::format_http_response(http_request& request)
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
-    }  else if (cached_resources.count(request.target) == 0) { /* Not Found */
+    } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         if (request.method_token == "POST" || request.method_token == "PUT")
         {
-                /* RFC7231/4.3.3.
+            /* RFC7231/4.3.3.
             * CGI for example comes here
             * if one or more resources has been created, status code needs to be 201 with "Created"
             *   with "Location" header field that provides an identifier for the primary resource created
@@ -682,7 +691,8 @@ http_response server::format_http_response(http_request& request)
             *   header field that has the same value as the POST's effective request URI
             * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
             */
-        int cgi_pipe[2];
+            PRINT_HERE();
+            int cgi_pipe[2];
             if (pipe(cgi_pipe) == -1)
                 TERMINATE("pipe failed");
             if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
@@ -699,7 +709,7 @@ http_response server::format_http_response(http_request& request)
             int *a = (int *)malloc(sizeof(int));
             *a = cgi_pipe[READ_END];
             events->addReadEvent(cgi_pipe[READ_END], a);
-            return (http_response::reject_http_response());
+            return (http_response::cgi_response());
         }
         std::string constructedPath;
         if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
@@ -720,20 +730,22 @@ http_response server::format_http_response(http_request& request)
             cached_resources[request.target].content = response.payload;
             cached_resources[request.target].target = request.target;
             close(fd);
-        }
-        else {
+        } else {
             response.status_code = "404";
             response.reason_phrase = "Not Found";
+            response.header_fields["Connection"] = "close";
         }
     } else if (cached_resources[request.target].allowed_methods.count(request.method_token) == 0) { /* Not Allowed */
         response.status_code = "405";
         response.reason_phrase = "Method Not Allowed";
+        response.header_fields["Connection"] = "close";
         /* RFC7231/6.5.5. must generate Allow header field */
         for (std::set<std::string>::const_iterator cit = cached_resources[request.target].allowed_methods.begin(); cit != cached_resources[request.target].allowed_methods.end(); ++cit)
             response.header_fields["Allow"] += response.header_fields.count("Allow") ? "," + *cit : *cit;
     } else if (accepted_request_methods.count(request.method_token) == 0) { /* Not Implemented */
         response.status_code = "501";
         response.reason_phrase = "Not Implemented";
+        response.header_fields["Connection"] = "close";
     } else { /* 200 */
         response.status_code = "200";
         response.reason_phrase = "OK";
@@ -752,12 +764,14 @@ http_response server::format_http_response(http_request& request)
             {
                 response.status_code = "403";
                 response.reason_phrase = "Forbidden";
+                response.header_fields["Connection"] = "close";
             }
         }
         else
         {
             response.status_code = "404";
             response.reason_phrase = "Not Found";
+            response.header_fields["Connection"] = "close";
         }
     }
 
@@ -780,6 +794,8 @@ http_response server::format_http_response(http_request& request)
     /* add payload */
     if (response.payload.size() == 0 && match(response.status_code, "4..") == false && cached_resources[request.target].is_static == false) /* if resource exists and is dynamic */
     {
+        LOG("cgi was already handled at this point I think?");
+        assert(false);
         /* NEED: execute the corresponding script with CGI
         * 1. pass meta_variables as environment variables to the script
         * 2. fork and execute script
@@ -848,7 +864,6 @@ http_response server::format_http_response(http_request& request)
     }
     else
         response.payload = cached_resources["/error"].content;
-    LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     return (response);
 }
 
@@ -969,12 +984,13 @@ void server::router(int socket, const http_response &response)
     // LOG("\nresponse message:");
     for (std::map<std::string, std::string>::const_iterator cit = response.header_fields.begin(); cit != response.header_fields.end(); ++cit)
     {
-        message += cit->first + ":" + cit->second + "\n";
+        message += cit->first + ": " + cit->second + "\n";
         // LOG(message);
     }
     message += "\n";
     message += response.payload;
-    // LOG(message);
+    LOG(message);
+    LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     send(socket, message.c_str(), message.length(), 0);
 }
 

@@ -44,7 +44,7 @@ void Network::runNetwork()
                     char *curLine;
                     while ((curLine = get_next_line(*(int *)events[i].udata)))
                         response += std::string(curLine);
-                    LOG("CGI Response: " << response);
+                    // LOG("CGI Response: " << response);
                     send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
                 }
                 /* cut connection with the client */
