@@ -109,7 +109,17 @@ void    server::read_request(int fd)
             else
                 finished_reading = true;
         } else {
-            finished_reading = true;
+            /* read until end of chunk */
+            request_body += line;
+            if (line == "0\r\n" || line == "0\r")
+            {
+                PRINT_HERE();
+                char_line = get_next_line(fd);
+                line = char_line;
+                free(char_line);
+                request_body += line;
+                finished_reading = true;
+            }
         }
     }
     // LOG("Request header fields:");
@@ -366,7 +376,7 @@ void server::handle_connection(int socket)
         httpRequest += *it;
     httpRequest += request_body;
     HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-        << std::endl << displayTimestamp() << " [Request from socket - " << socket << "]" << std::endl
+        << std::endl << displayTimestamp() << " [REQUEST from socket - " << socket << "]" << std::endl
         << httpRequest << std::endl
         << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     if (is_post == true && found_content_length == false && chunked == false)
@@ -1004,11 +1014,11 @@ void server::router(int socket, const http_response &response)
     message += "\n";
     message += response.payload;
     HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-        << std::endl << displayTimestamp() << " [Response to socket - " << socket << "]" << std::endl << message << std::endl
+        << std::endl << displayTimestamp() << " [RESPONSE to socket - " << socket << "]" << std::endl << message << std::endl
         << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
-    NETWORK_LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
+    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     send(socket, message.c_str(), message.length(), 0);
 }
 

@@ -4,7 +4,7 @@
 
 Log ID: 0
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
+[14:59:26]  [REQUEST from socket - 8]
 GET / HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
@@ -18,7 +18,7 @@ Accept-Encoding: gzip
 
 Log ID: 1
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 745
 Content-Type: text/html
@@ -31,7 +31,7 @@ Content-Type: text/html
 
 Log ID: 2
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
+[14:59:26]  [REQUEST from socket - 8]
 POST / HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
@@ -39,6 +39,7 @@ Transfer-Encoding: chunked
 Content-Type: test/file
 Accept-Encoding: gzip
 
+0
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -47,7 +48,7 @@ Accept-Encoding: gzip
 
 Log ID: 3
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 405 Method Not Allowed
 Allow: GET
 Connection: close
@@ -62,32 +63,7 @@ Content-Type: text/html
 
 Log ID: 4
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 5
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
-HTTP/1.1 400 Bad Request
-Connection: close
-Content-Language: en-US
-Content-Length: 245
-Content-Type: text/html
-
-<html lang="en">    <head>        <title>Error 404 (Not Found)!!</title>    </head>    <body>        <h1>404. That's an error.</h1>        <p>The requested URL was not found on this server.</p>        <p>That's all we know.</p>    </body></html>
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 6
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
+[14:59:26]  [REQUEST from socket - 8]
 HEAD / HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
@@ -98,9 +74,9 @@ User-Agent: Go-http-client/1.1
 
 
 
-Log ID: 7
+Log ID: 5
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 405 Method Not Allowed
 Allow: GET
 Connection: close
@@ -113,10 +89,37 @@ Content-Type: text/html
 
 
 
+Log ID: 6
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory HTTP/1.1
+Host: localhost:80
+User-Agent: Go-http-client/1.1
+Accept-Encoding: gzip
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+Log ID: 7
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+[14:59:26]  [RESPONSE to socket - 8]
+HTTP/1.1 200 OK
+Content-Length: 0
+Content-Type: 
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
 Log ID: 8
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/youpi.bad_extension HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -129,7 +132,7 @@ Accept-Encoding: gzip
 
 Log ID: 9
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: 
@@ -142,8 +145,8 @@ Content-Type:
 
 Log ID: 10
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/youpi.bad_extension HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/youpi.bla HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -156,7 +159,7 @@ Accept-Encoding: gzip
 
 Log ID: 11
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: 
@@ -169,8 +172,8 @@ Content-Type:
 
 Log ID: 12
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/youpi.bla HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/oulalala HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -183,34 +186,7 @@ Accept-Encoding: gzip
 
 Log ID: 13
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
-HTTP/1.1 200 OK
-Content-Length: 0
-Content-Type: 
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 14
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/oulalala HTTP/1.1
-Host: localhost:80
-User-Agent: Go-http-client/1.1
-Accept-Encoding: gzip
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 15
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 404 Not Found
 Connection: close
 Content-Language: en-US
@@ -223,10 +199,37 @@ Content-Type: text/html
 
 
 
+Log ID: 14
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/nop HTTP/1.1
+Host: localhost:80
+User-Agent: Go-http-client/1.1
+Accept-Encoding: gzip
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+Log ID: 15
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+[14:59:26]  [RESPONSE to socket - 8]
+HTTP/1.1 200 OK
+Content-Length: 0
+Content-Type: 
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
 Log ID: 16
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/nop HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/nop/ HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -239,7 +242,7 @@ Accept-Encoding: gzip
 
 Log ID: 17
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: 
@@ -252,8 +255,8 @@ Content-Type:
 
 Log ID: 18
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/nop/ HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/nop/other.pouic HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -266,7 +269,7 @@ Accept-Encoding: gzip
 
 Log ID: 19
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: 
@@ -279,8 +282,8 @@ Content-Type:
 
 Log ID: 20
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/nop/other.pouic HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/nop/other.pouac HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -293,12 +296,14 @@ Accept-Encoding: gzip
 
 Log ID: 21
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
-HTTP/1.1 200 OK
-Content-Length: 0
-Content-Type: 
+[14:59:26]  [RESPONSE to socket - 8]
+HTTP/1.1 404 Not Found
+Connection: close
+Content-Language: en-US
+Content-Length: 245
+Content-Type: text/html
 
-
+<html lang="en">    <head>        <title>Error 404 (Not Found)!!</title>    </head>    <body>        <h1>404. That's an error.</h1>        <p>The requested URL was not found on this server.</p>        <p>That's all we know.</p>    </body></html>
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -306,8 +311,8 @@ Content-Type:
 
 Log ID: 22
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/nop/other.pouac HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/Yeah HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -320,7 +325,7 @@ Accept-Encoding: gzip
 
 Log ID: 23
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 404 Not Found
 Connection: close
 Content-Language: en-US
@@ -335,8 +340,8 @@ Content-Type: text/html
 
 Log ID: 24
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/Yeah HTTP/1.1
+[14:59:26]  [REQUEST from socket - 8]
+GET /directory/Yeah/not_happy.bad_extension HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Accept-Encoding: gzip
@@ -349,36 +354,7 @@ Accept-Encoding: gzip
 
 Log ID: 25
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
-HTTP/1.1 404 Not Found
-Connection: close
-Content-Language: en-US
-Content-Length: 245
-Content-Type: text/html
-
-<html lang="en">    <head>        <title>Error 404 (Not Found)!!</title>    </head>    <body>        <h1>404. That's an error.</h1>        <p>The requested URL was not found on this server.</p>        <p>That's all we know.</p>    </body></html>
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 26
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-GET /directory/Yeah/not_happy.bad_extension HTTP/1.1
-Host: localhost:80
-User-Agent: Go-http-client/1.1
-Accept-Encoding: gzip
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 27
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
+[14:59:26]  [RESPONSE to socket - 8]
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: 
@@ -389,41 +365,15 @@ Content-Type:
 
 
 
-Log ID: 28
+Log ID: 26
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
+[14:59:26]  [REQUEST from socket - 8]
 PUT /put_test/file_should_exist_after HTTP/1.1
 Host: localhost:80
 User-Agent: Go-http-client/1.1
 Transfer-Encoding: chunked
 Accept-Encoding: gzip
 
+3e8aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0
 
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 29
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Request from socket - 8]
-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-0
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-Log ID: 30
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-[14:32:54]  [Response to socket - 8]
-HTTP/1.1 400 Bad Request
-Connection: close
-Content-Language: en-US
-Content-Length: 245
-Content-Type: text/html
-
-<html lang="en">    <head>        <title>Error 404 (Not Found)!!</title>    </head>    <body>        <h1>404. That's an error.</h1>        <p>The requested URL was not found on this server.</p>        <p>That's all we know.</p>    </body></html>
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
