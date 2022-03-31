@@ -1,53 +1,53 @@
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: POST] [target: /] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 405 - Method Not Allowed]
-[13:19:07]  RESPONSE -> [status: 400 - Bad Request]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: POST] [target: /] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 405 - Method Not Allowed]
+[13:29:40]  RESPONSE -> [status: 400 - Bad Request]
+[13:29:40]  Client disconnected on socket: 8
 
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: HEAD] [target: /] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 405 - Method Not Allowed]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: HEAD] [target: /] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 405 - Method Not Allowed]
+[13:29:40]  Client disconnected on socket: 8
 
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/youpi.bad_extension] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/youpi.bla] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/oulalala] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 404 - Not Found]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/youpi.bad_extension] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/youpi.bla] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/oulalala] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 404 - Not Found]
+[13:29:40]  Client disconnected on socket: 8
 
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/nop] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/nop/] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouic] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouac] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 404 - Not Found]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/nop] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/nop/] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouic] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouac] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 404 - Not Found]
+[13:29:40]  Client disconnected on socket: 8
 
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/Yeah] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 404 - Not Found]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/Yeah] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 404 - Not Found]
+[13:29:40]  Client disconnected on socket: 8
 
 
-[13:19:07]  Client joined from socket: 8
-[13:19:07]  REQUEST  -> [method: GET] [target: /directory/Yeah/not_happy.bad_extension] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 200 - OK]
-[13:19:07]  REQUEST  -> [method: PUT] [target: /put_test/file_should_exist_after] [version: HTTP/1.1]
-[13:19:07]  RESPONSE -> [status: 400 - Bad Request]
-[13:19:07]  Client disconnected on socket: 8
+[13:29:40]  Client joined from socket: 8
+[13:29:40]  REQUEST  -> [method: GET] [target: /directory/Yeah/not_happy.bad_extension] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 200 - OK]
+[13:29:40]  REQUEST  -> [method: PUT] [target: /put_test/file_should_exist_after] [version: HTTP/1.1]
+[13:29:40]  RESPONSE -> [status: 400 - Bad Request]
+[13:29:40]  Client disconnected on socket: 8
 

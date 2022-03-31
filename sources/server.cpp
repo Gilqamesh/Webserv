@@ -996,7 +996,9 @@ void server::router(int socket, const http_response &response)
     }
     message += "\n";
     message += response.payload;
-    HTTP_MESSAGE_LOG("[Socket: " << socket << std::endl << message << std::endl);
+    HTTP_MESSAGE_LOG("\n\n\n\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        << std::endl << displayTimestamp() << "[Response to socket - " << socket << "]" << std::endl << message << std::endl
+        << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     NETWORK_LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
