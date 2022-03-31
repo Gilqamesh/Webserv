@@ -19,7 +19,17 @@ void    server::get_header_field(void)
             tmp.clear();
             if (headerFields.back() == "\r\n")
             {
+                start_body_pos = i++;
                 header_is_parsed = true;
+                for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+                {
+                    if ((*it).find("POST") != std::string::npos)
+                        is_post = true;
+                    else if ((*it).find("Transfer-Encoding: chunked") != std::string::npos)
+                        chunked = true;
+                    else if ((*it).find("Content-Length") != std::string::npos)
+                        found_content_length = true; 
+                } 
                 return ;
             }
         }
@@ -29,67 +39,49 @@ void    server::get_header_field(void)
 void    server::get_body(void)
 {
     request_body.clear();
-    std::string crlf = "\r\n\r\n";
-    std::vector<char>::iterator it = std::search(main_vec.begin(), main_vec.end(), crlf.begin(), crlf.end());
-    for (; it + 4 != main_vec.end(); ++it)
-        request_body += *it;
-
+    for (; start_body_pos < main_vec.size(); start_body_pos++)
+        request_body += main_vec[start_body_pos];
 }
 
 void    server::read_request(int fd)
 {
-    std::vector<char>::iterator it;
-    std::vector<char> tmp(4096);
+    std::vector<char> tmp(4194304);
 
-    read(fd, tmp.begin().base(), 4096);
-    main_vec.insert(main_vec.begin(), tmp.begin(), tmp.end());
+    read(fd, tmp.begin().base(), 4194304);
+    main_vec.insert(main_vec.end(), tmp.begin(), tmp.end());
     tmp.clear();
 
     if (header_is_parsed == false)
     {
-        std::string crlf = "\r\n\r\n";
-        crlf_it = std::search(main_vec.begin(), main_vec.end(), crlf.begin(), crlf.end());
-        if (crlf_it == main_vec.end())
-            return ;
-        header_is_parsed = true;
+        get_header_field();
+        if (header_is_parsed == false)
+            return;
     }
-    std::string strPost = "POST";
-    std::string strChunked = "Transfer-Encoding: chunked";
-    std::string strContLength = "Content-Length";
 
-    it = std::search(main_vec.begin(), main_vec.end(), strPost.begin(), strPost.end());
-    if (it != main_vec.end())
-        is_post = true;
-    it = std::search(main_vec.begin(), main_vec.end(), strChunked.begin(), strChunked.end());
-    if (it != main_vec.end())
-        chunked = true;
-    it = std::search(main_vec.begin(), main_vec.end(), strContLength.begin(), strContLength.end());
-    if (it != main_vec.end())
-        content_length_exists = true;
-    if (is_post == true && chunked == false && content_length_exists == false)
+    if (is_post == true && chunked == false && found_content_length == false)
         return ; // needs to be handled
 
     if (chunked == true)
     {
-        std::string crlf = "\r\n\r\n";
-        std::vector<char>::iterator it = std::search(crlf_it + 1, main_vec.end(), crlf.begin(), crlf.end());
-        if (it == main_vec.end())
+        std::vector<char>::iterator it = main_vec.end();
+        if (*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r')
+        {
+            finished_reading = true;
+            get_body();
+        }
+        else
             return ;
-        finished_reading = true;
     }
 
     // PARSING
     finished_reading = true;
-    get_header_field();
-    get_body();
     main_vec.clear();
     LOG("HEADERFIELDS:");
     for (size_t i = 0; i < headerFields.size(); ++i)
         std::cout << headerFields[i];
     LOG("REQUEST_BODY:");
-    LOG(request_body);
+    std::cout << request_body;
     header_is_parsed = false;
-    content_length_exists = false;
 
 
     // if (header_is_parsed == false)
@@ -98,12 +90,8 @@ void    server::read_request(int fd)
     //     // LOG("consider_body     = " << consider_body);
     //     // LOG("getting_body      = " << getting_body);
     //     char    *char_line = NULL;
-    //     // std::vector<char> buffer(4096);
     //     std::string  line;
 
-    //     // MozzilaDeveloper
-
-    //     // read(fd, buffer.begin().base(), 4096);
     //     char_line = get_next_line(fd);
     //     // LOG("Line - " << char_line);
     //     // std::cout << "ASCII - ";
@@ -245,7 +233,6 @@ const t_server &configuration)
     is_post = false;
     content_length = 0;
     chunked = false;
-    content_length_exists = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -477,7 +464,6 @@ void server::handle_connection(int socket)
     finished_reading = false; 
     header_is_parsed = false;
     chunked = false;
-    content_length_exists = false;
     is_post = false;
     request_body.clear();
     struct sockaddr addr;
@@ -573,10 +559,13 @@ bool            server::check_prebody(std::string current_line,  http_request &r
 */
 http_request server::parse_request_header(int socket)
 {  
-    read_request(socket);
+    read_request(socket); /* read entire message */
     if (finished_reading == false)
         return (http_request::chunked_http_request());
 
+    /* extract header fields and store it in 'headerFields' */
+    /* convert 'headerFields' to 'headerFieldsMap' */
+    /* put the rest in 'request_body' */
     // LOG("Request header fields:");
     // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
     //     std::cout << (*it);

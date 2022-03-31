@@ -1,9 +1,9 @@
-[19:18:02]  Client joined from socket: 8
+[21:12:49]  Client joined from socket: 8
 Log ID: 0
-[19:18:02]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
+[21:12:50]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
 Log ID: 1
-[19:18:02]  RESPONSE -> [status: 200 - OK]
+[21:12:50]  RESPONSE -> [status: 200 - OK]
 Log ID: 2
-[19:18:02]  RESPONSE -> [status: 400 - Bad Request]
-[19:18:02]  Client disconnected on socket: 8
+[21:12:55]  RESPONSE -> [status: 408 - Request Timeout]
+[21:12:55]  Client disconnected on socket: 8
 

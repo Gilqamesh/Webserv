@@ -50,14 +50,15 @@ private:
     EventHandler                        *events;
 
     std::vector<std::string>            headerFields;
+    std::map<std::string, std::string>  headerFieldsMap;
     std::string                         method;
     bool                                found_content_length;
     bool                                finished_reading;
     bool                                header_is_parsed;
     bool                                chunked;
-    bool                                content_length_exists;
     bool                                is_post;
     int                                 content_length;
+    size_t                              start_body_pos;
     std::string                         request_body;
     std::vector<char>                   main_vec;
     std::vector<char>::iterator         crlf_it;
