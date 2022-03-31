@@ -36,6 +36,13 @@
     } while (0)
 # define TIMEOUT_TO_CUT_CONNECTION 5 /* in seconds */
 # define CRLF std::string("\x0d") /* Chrome CRLF is CR */
+
+extern std::ofstream network_log;
+# define NETWORK_LOG(x) (network_log << x << std::endl)
+
+extern std::ofstream http_message_log;
+# define HTTP_MESSAGE_LOG(x) (http_message_log << x << std::endl)
+
 /* for pipes */
 # define READ_END   0
 # define WRITE_END  1

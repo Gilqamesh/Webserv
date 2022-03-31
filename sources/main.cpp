@@ -1,5 +1,8 @@
 #include "Network.hpp"
 
+std::ofstream network_log("logs/network_log");
+std::ofstream http_message_log("logs/http_message_log");
+
 int main(int argc, char **argv)
 {
     Network                 network;

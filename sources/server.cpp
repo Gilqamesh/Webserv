@@ -5,7 +5,6 @@
 /*
 * helper to initialize some constants
 */
-
 void    server::read_request(int fd)
 {   
 
@@ -314,6 +313,7 @@ int server::accept_connection(void)
 
 //    LOG_TIME("Client joined from socket: " << new_socket);
     LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
+    NETWORK_LOG(std::endl << displayTimestamp() << " Client joined from socket: " << new_socket);
 
    return new_socket;
 }
@@ -329,6 +329,7 @@ int server::accept_connection(void)
 */
 void server::cut_connection(int socket)
 {
+    LOG("Socket: " << socket);
     assert(current_number_of_connections > 0);
     --current_number_of_connections;
     /* close socket after we are done communicating */
@@ -340,11 +341,13 @@ void server::cut_connection(int socket)
     {
         // LOG_TIME("Server disconnected on socket: " << socket);
         LOG(displayTimestamp() << " Server disconnected on socket: " << socket);
+        NETWORK_LOG(displayTimestamp() << " Server disconnected on socket: " << socket << std::endl);
     }
     else
     {
         // LOG_TIME("Client disconnected on socket: " << socket);
         LOG(displayTimestamp() << " Client disconnected on socket: " << socket);
+        NETWORK_LOG(displayTimestamp() << " Client disconnected on socket: " << socket << std::endl);
     }
 }
 
@@ -364,7 +367,7 @@ void server::handle_connection(int socket)
         PRINT_HERE();
         http_response response = http_response::reject_http_response();
         router(socket, response);
-        cut_connection(socket);
+        // cut_connection(socket);
         return ;
     }
     finished_reading = false; 
@@ -386,10 +389,9 @@ void server::handle_connection(int socket)
     headerFields.clear();
     if (response.handled_by_cgi == false)
         router(socket, response);
-    if (request.reject == true)
-        cut_connection(socket);
+    // if (request.reject == true)
+    //     cut_connection(socket);
 }
-
 
 bool    server::check_first_line(std::string current_line, http_request &request)
 {
@@ -405,7 +407,10 @@ bool    server::check_first_line(std::string current_line, http_request &request
     // LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
     LOG("current line: " << current_line);
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
+    {
+        PRINT_HERE();
         return (false); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
+    }
     request.scheme = "http";
     std::vector<std::string> words = conf_file::get_words(current_line);
     request.method_token = words[0];
@@ -537,6 +542,7 @@ http_request server::parse_request_header(int socket)
     // LOG("Payload: " << request.payload);
 
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    NETWORK_LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
 }
 
@@ -679,6 +685,7 @@ http_response server::format_http_response(http_request& request)
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
+        response.header_fields["Connection"] = "close";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         if (request.method_token == "POST" || request.method_token == "PUT")
         {
@@ -989,8 +996,10 @@ void server::router(int socket, const http_response &response)
     }
     message += "\n";
     message += response.payload;
+    HTTP_MESSAGE_LOG("[Socket: " << socket << std::endl << message << std::endl);
     LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
+    NETWORK_LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     send(socket, message.c_str(), message.length(), 0);
 }
 
