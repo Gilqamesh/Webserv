@@ -684,6 +684,17 @@ std::string server::isAllowedDirectory(const std::string &target)
     return ("");
 }
 
+/*
+ * Returns true if 'target' is under any of our 'location' directories, false otherwise
+ */
+bool server::isAllowedDirectory2(const std::string &target)
+{
+    for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
+        if (target.substr(0, cit->first.size()) == cit->first)
+            return (true);
+    return (false);
+}
+
 /* Constructs http_response
 * 1. Construct Status Line
 *   1.1. HTTP-version
@@ -705,38 +716,10 @@ http_response server::format_http_response(http_request& request)
         response.header_fields["Connection"] = "close";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         if (request.method_token == "POST" || request.method_token == "PUT")
-        {
-            /* RFC7231/4.3.3.
-            * CGI for example comes here
-            * if one or more resources has been created, status code needs to be 201 with "Created"
-            *   with "Location" header field that provides an identifier for the primary resource created
-            *   and a representation that describes the status of the request while referring to the new resource(s).
-            * If no resources are created, respond with 200 that containts the result and a "Content-Location"
-            *   header field that has the same value as the POST's effective request URI
-            * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
-            */
-            PRINT_HERE();
-            int cgi_pipe[2];
-            if (pipe(cgi_pipe) == -1)
-                TERMINATE("pipe failed");
-            if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
-                TERMINATE("fcntl failed");
-            if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
-                TERMINATE("fcntl failed");
-            /* write request payload into socket */
-            (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
-            CGI script(cgi_pipe, &request);
-            add_script_meta_variables(script, request);
-            script.execute();
-            close(cgi_pipe[WRITE_END]);
-            /* register an event for this socket */
-            int *a = (int *)malloc(sizeof(int));
-            *a = cgi_pipe[READ_END];
-            events->addReadEvent(cgi_pipe[READ_END], a);
-            return (http_response::cgi_response());
-        }
-        std::string constructedPath;
-        if ((constructedPath = isAllowedDirectory(request.target)).size()) { /* check if directory is allowed and if the file exists */
+            return (handle_post_request(request));
+        std::string constructedPath(isAllowedDirectory(request.target));
+        if (constructedPath.size()) { /* check if directory is allowed and if the fil   e exists */
+
             cached_resources[request.target].allowed_methods.insert("GET");
             cached_resources[request.target].is_static = true;
             /* add this to the cached_resources */
@@ -1103,4 +1086,60 @@ int server::fileExists(const std::string& file)
         return (0);
     }
     return (0);
+}
+
+http_response server::handle_post_request(http_request &request)
+{
+    /* RFC7231/4.3.3.
+    * CGI for example comes here
+    * if one or more resources has been created, status code needs to be 201 with "Created"
+    *   with "Location" header field that provides an identifier for the primary resource created
+    *   and a representation that describes the status of the request while referring to the new resource(s).
+    * If no resources are created, respond with 200 that containts the result and a "Content-Location"
+    *   header field that has the same value as the POST's effective request URI
+    * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
+    */
+    std::string constructedPath(isAllowedDirectory(request.target));
+    if (constructedPath.size())
+    {   /* if cgi exists -> run it */
+        int cgi_pipe[2];
+        if (pipe(cgi_pipe) == -1)
+            TERMINATE("pipe failed");
+        if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+            TERMINATE("fcntl failed");
+        /* write request payload into socket */
+        (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+        CGI script(cgi_pipe, &request);
+        add_script_meta_variables(script, request);
+        script.execute();
+        close(cgi_pipe[WRITE_END]);
+        /* register an event for this socket */
+        int *a = (int *)malloc(sizeof(int));
+        *a = cgi_pipe[READ_END];
+        events->addReadEvent(cgi_pipe[READ_END], a);
+        return (http_response::cgi_response());
+    }
+    else
+    {   /* if it doesn't exist -> create/update it with request */
+        if (isAllowedDirectory2(request.target) == false)
+            return (http_response::reject_http_response());
+        PRINT_HERE();
+        LOG("request.target: " << request.target);
+        std::ofstream uploaded_file("uploads" + request.target);
+        if (!uploaded_file)
+            WARN("Failed to open " << "uploads" + request.target);
+        LOG("request.payload: " << request.payload);
+        uploaded_file << request.payload;
+        http_response response;
+        response.http_version = "HTTP/1.1";
+        response.status_code = "200";
+        response.reason_phrase = "OK";
+        response.header_fields["Content-Type"] = "text/html";
+        response.header_fields["Content-Length"] = std::to_string(request.payload.size());
+        response.header_fields["Connection"] = "close";
+        response.payload = request.payload;
+        return (response);
+    }
 }

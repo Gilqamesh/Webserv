@@ -110,6 +110,9 @@ private:
     std::string     displayTimestamp(void);
     int             fileExists(const std::string& file);
     std::string     isAllowedDirectory(const std::string &target);
+    bool            isAllowedDirectory2(const std::string &target);
+
+    http_response   handle_post_request(http_request &request);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
     std::map<std::string, t_location>   sortedRoutes; /* for isAllowedDirectory to handle more specific routes first instead of the generic ones */
