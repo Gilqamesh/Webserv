@@ -12,6 +12,7 @@
 # include "http_response.hpp"
 # include "resource.hpp"
 # include "CGI.hpp"
+# include "conf_file.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -27,9 +28,6 @@
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*"
 # define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
 # define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*"
-
-typedef struct s_server t_server;
-typedef struct s_location t_location;
 
 class server
 {
@@ -59,6 +57,7 @@ private:
     int                                 content_length;
     std::string                         request_body;
     std::vector<char>                   main_vec;
+    t_server                            server_configuration;
 public:
 
     void            read_request(int fd);
@@ -110,7 +109,7 @@ private:
     std::string     displayTimestamp(void);
     int             fileExists(const std::string& file);
     std::string     isAllowedDirectory(const std::string &target);
-    bool            isAllowedDirectory2(const std::string &target);
+    std::string     isAllowedDirectory2(const std::string &target);
 
     http_response   handle_post_request(http_request &request);
 

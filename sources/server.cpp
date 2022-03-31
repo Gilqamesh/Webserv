@@ -152,6 +152,7 @@ const t_server &configuration)
     start_timestamp = timestamp;
     cgi_responses = cgiResponses;
     events = eventQueue;
+    server_configuration = configuration;
     locations = configuration.locations;
     finished_reading = false;
     header_is_parsed = false;
@@ -685,14 +686,27 @@ std::string server::isAllowedDirectory(const std::string &target)
 }
 
 /*
- * Returns true if 'target' is under any of our 'location' directories, false otherwise
+ * Returns substituted path if 'target' is under any of our 'location' directories
  */
-bool server::isAllowedDirectory2(const std::string &target)
+std::string server::isAllowedDirectory2(const std::string &target)
 {
     for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
+    {
+        // cit->second.root == views
+        // cit->first == /error
+        // target == /error/lol/asd.txt
+        // path = views/lol/asd.txt
+        if (cit->first == "")
+            return ("");
         if (target.substr(0, cit->first.size()) == cit->first)
-            return (true);
-    return (false);
+        {
+            std::string path = cit->second.root;
+            if (target.size() > cit->first.size())
+                path += target.substr(cit->first.size());
+            return (path);
+        }
+    }
+    return ("");
 }
 
 /* Constructs http_response
@@ -1099,9 +1113,18 @@ http_response server::handle_post_request(http_request &request)
     *   header field that has the same value as the POST's effective request URI
     * If result is equivalent to already existing resource, redirect with 303 with "Location" header field
     */
-    std::string constructedPath(isAllowedDirectory(request.target));
-    if (constructedPath.size())
-    {   /* if cgi exists -> run it */
+    size_t pos = request.target.find_last_of('.');
+    std::string extension;
+    if (pos != std::string::npos)
+        extension = request.target.substr(pos);
+    if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
+    {   /*
+         * if general_cgi_extension exists in config file and the request resource matches this extension
+         * -> general_cgi_path should exist, run it
+         */
+        request.target = server_configuration.general_cgi_path;
+        if (request.target.front() != '/')
+            request.target = "/" + request.target;
         int cgi_pipe[2];
         if (pipe(cgi_pipe) == -1)
             TERMINATE("pipe failed");
@@ -1121,25 +1144,103 @@ http_response server::handle_post_request(http_request &request)
         events->addReadEvent(cgi_pipe[READ_END], a);
         return (http_response::cgi_response());
     }
-    else
-    {   /* if it doesn't exist -> create/update it with request */
-        if (isAllowedDirectory2(request.target) == false)
-            return (http_response::reject_http_response());
-        PRINT_HERE();
-        LOG("request.target: " << request.target);
-        std::ofstream uploaded_file("uploads" + request.target);
-        if (!uploaded_file)
-            WARN("Failed to open " << "uploads" + request.target);
-        LOG("request.payload: " << request.payload);
-        uploaded_file << request.payload;
-        http_response response;
-        response.http_version = "HTTP/1.1";
-        response.status_code = "200";
-        response.reason_phrase = "OK";
-        response.header_fields["Content-Type"] = "text/html";
-        response.header_fields["Content-Length"] = std::to_string(request.payload.size());
-        response.header_fields["Connection"] = "close";
-        response.payload = request.payload;
-        return (response);
+    std::string underLocation(isAllowedDirectory2(request.target));
+    LOG("underLocation: " << underLocation);
+    if (underLocation.size()) /* location exists */
+    {
+        std::string location;
+        for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
+        {
+            if (request.target.substr(0, cit->first.size()) == cit->first)
+            {
+                location = cit->first;
+                break ;
+            }
+        }
+        assert(location.size()); /* location should exist */
+        LOG("location: " << location);
+        if (sortedRoutes[location].cgi_extension.size() && sortedRoutes[location].cgi_extension == extension)
+        {
+            /*
+            * if cgi_extension exists in location and the request resource matches this extension
+            * -> cgi_path should exist, run it
+            */
+            request.target = sortedRoutes[location].cgi_path;
+            if (request.target.front() != '/')
+                request.target = "/" + request.target;
+            int cgi_pipe[2];
+            if (pipe(cgi_pipe) == -1)
+                TERMINATE("pipe failed");
+            if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
+                TERMINATE("fcntl failed");
+            if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
+                TERMINATE("fcntl failed");
+            /* write request payload into socket */
+            (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
+            CGI script(cgi_pipe, &request);
+            add_script_meta_variables(script, request);
+            script.execute();
+            close(cgi_pipe[WRITE_END]);
+            /* register an event for this socket */
+            int *a = (int *)malloc(sizeof(int));
+            *a = cgi_pipe[READ_END];
+            events->addReadEvent(cgi_pipe[READ_END], a);
+            return (http_response::cgi_response());
+        }
+        for (std::vector<std::string>::iterator it = sortedRoutes[location].methods.begin();
+            it != sortedRoutes[location].methods.end(); ++it)
+        {
+            LOG("*it: " << *it);
+            if (*it == "PUT" && request.method_token == "PUT")
+            { /* check if files exists -> if so update it */
+                std::ofstream uploaded_file(underLocation);
+                PRINT_HERE();
+                LOG("uploaded_file: " << uploaded_file);
+                if (!uploaded_file)
+                    WARN("Failed to create file: " + underLocation);
+                uploaded_file << request.payload;
+                LOG("request.payload: " << request.payload);
+                http_response response;
+                response.http_version = "HTTP/1.1";
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+                response.header_fields["Content-Type"] = "text/html";
+                response.header_fields["Content-Length"] = std::to_string(request.payload.size());
+                response.header_fields["Connection"] = "close";
+                response.payload = request.payload;
+                return (response);
+            }
+            else if (*it == "POST" && request.method_token == "POST")
+            { /* creates and overwrites resource */
+                std::ofstream uploaded_file(underLocation);
+                PRINT_HERE();
+                LOG("uploaded_file: " << uploaded_file);
+                if (!uploaded_file)
+                    WARN("Failed to create file: " + underLocation);
+                uploaded_file << request.payload;
+                LOG("request.payload: " << request.payload);
+                http_response response;
+                response.http_version = "HTTP/1.1";
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+                response.header_fields["Content-Type"] = "text/html";
+                response.header_fields["Content-Length"] = std::to_string(request.payload.size());
+                response.header_fields["Connection"] = "close";
+                response.payload = request.payload;
+                return (response);
+            }
+        }
+        /* Respond with method not allowed */
+        return (http_response::reject_http_response());
     }
+    /* 404 not found */
+    http_response response;
+    response.http_version = "HTTP/1.1";
+    response.status_code = "404";
+    response.reason_phrase = "Not Found";
+    response.header_fields["Connection"] = "close";
+    response.header_fields["Content-Type"] = "text/html";
+    response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+    response.payload = cached_resources["/error"].content;
+    return (response);
 }

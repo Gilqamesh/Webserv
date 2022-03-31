@@ -29,6 +29,8 @@ typedef struct s_server
 	std::string					host;
 	std::string					error_page;
 	std::string					server_name;
+	std::string					general_cgi_path;
+	std::string					general_cgi_extension;
 	std::vector<t_location>		locations;
 }			t_server;
 
