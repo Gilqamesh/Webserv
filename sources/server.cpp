@@ -313,8 +313,7 @@ int server::accept_connection(void)
 
 //    LOG_TIME("Client joined from socket: " << new_socket);
     LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
-    NETWORK_LOG(std::endl << displayTimestamp() << " Client joined from socket: " << new_socket);
-
+    NETWORK_LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
    return new_socket;
 }
 
@@ -362,12 +361,20 @@ void server::handle_connection(int socket)
     http_request request = parse_request_header(socket);
     if (request.reject == false && finished_reading == false)
         return ;
+    std::string httpRequest;
+    for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+        httpRequest += *it;
+    httpRequest += request_body;
+    HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        << std::endl << displayTimestamp() << " [Request from socket - " << socket << "]" << std::endl
+        << httpRequest << std::endl
+        << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     if (is_post == true && found_content_length == false && chunked == false)
     {
         PRINT_HERE();
         http_response response = http_response::reject_http_response();
         router(socket, response);
-        // cut_connection(socket);
+        cut_connection(socket);
         return ;
     }
     finished_reading = false; 
@@ -542,7 +549,7 @@ http_request server::parse_request_header(int socket)
     // LOG("Payload: " << request.payload);
 
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
-    NETWORK_LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
 }
 
@@ -996,8 +1003,8 @@ void server::router(int socket, const http_response &response)
     }
     message += "\n";
     message += response.payload;
-    HTTP_MESSAGE_LOG("\n\n\n\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-        << std::endl << displayTimestamp() << "[Response to socket - " << socket << "]" << std::endl << message << std::endl
+    HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        << std::endl << displayTimestamp() << " [Response to socket - " << socket << "]" << std::endl << message << std::endl
         << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");

@@ -38,9 +38,11 @@
 # define CRLF std::string("\x0d") /* Chrome CRLF is CR */
 
 extern std::ofstream network_log;
+extern int network_log_id;
 # define NETWORK_LOG(x) (network_log << x << std::endl)
 
 extern std::ofstream http_message_log;
+extern int http_message_log_id;
 # define HTTP_MESSAGE_LOG(x) (http_message_log << x << std::endl)
 
 /* for pipes */
