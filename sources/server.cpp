@@ -5,123 +5,209 @@
 /*
 * helper to initialize some constants
 */
+
+void    server::get_header_field(void)
+{
+    headerFields.clear();
+    std::string tmp;
+    for (size_t i = 0; i < main_vec.size(); ++i)
+    {
+        tmp += main_vec[i];
+        if (main_vec[i] == '\n')
+        {
+            headerFields.push_back(tmp);
+            tmp.clear();
+            if (headerFields.back() == "\r\n")
+            {
+                header_is_parsed = true;
+                return ;
+            }
+        }
+    }
+}
+
+void    server::get_body(void)
+{
+    request_body.clear();
+    std::string crlf = "\r\n\r\n";
+    std::vector<char>::iterator it = std::search(main_vec.begin(), main_vec.end(), crlf.begin(), crlf.end());
+    for (; it + 4 != main_vec.end(); ++it)
+        request_body += *it;
+
+}
+
 void    server::read_request(int fd)
-{   
+{
+    std::vector<char>::iterator it;
+    std::vector<char> tmp(4096);
+
+    read(fd, tmp.begin().base(), 4096);
+    main_vec.insert(main_vec.begin(), tmp.begin(), tmp.end());
+    tmp.clear();
 
     if (header_is_parsed == false)
     {
-        // LOG("\nfinished_readding = " << finished_reading);
-        // LOG("consider_body     = " << consider_body);
-        // LOG("getting_body      = " << getting_body);
-        char    *char_line = NULL;
-        // std::vector<char> buffer(4096);
-        std::string  line;
+        std::string crlf = "\r\n\r\n";
+        crlf_it = std::search(main_vec.begin(), main_vec.end(), crlf.begin(), crlf.end());
+        if (crlf_it == main_vec.end())
+            return ;
+        header_is_parsed = true;
+    }
+    std::string strPost = "POST";
+    std::string strChunked = "Transfer-Encoding: chunked";
+    std::string strContLength = "Content-Length";
 
-        // read(fd, buffer.begin().base(), 4096);
-        char_line = get_next_line(fd);
-        // LOG("Line - " << char_line);
-        // std::cout << "ASCII - ";
-        // for (size_t i = 0; i < strlen(char_line); ++i)
-        //     printf("%d", char_line[i]);
-        // LOG("");
-        line = char_line;
-        // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
-        //     line += *it;
-        // line += '\0';
-        // LOG("line: " << line);
-        // std::cout << "ASCII - ";
-        // for (size_t i = 0; i < line.size(); ++i)
-        //     printf("%d ", line[i]);
-        // LOG(line);
-        free(char_line);
-        char_line = NULL;
-        /*
-            if we have \r\n\r\n -> parsed entire header
-                1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
-                2. Content-Length -> read until whole length is read
-                3. Return with 400
-            else
-                keep reading until header is parsed
-        */
-        if (is_post == false && line.find("POST") != std::string::npos)
-            is_post = true;
-        if (line.find("Transfer-Encoding: chunked") != std::string::npos)
-            chunked = true;
-        if (line.find("Content-Length") != std::string::npos)
-        {
-            found_content_length = true;
-            // content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
-        }
-        if (line == "\r\n" || line == "\r\n\r\n")
-        {
-            header_is_parsed = true;
-            if (is_post == true && chunked == false && found_content_length == false)
-            {
-                finished_reading = true;
-                headerFields.push_back(line);
-                return ;
-            }
-            if (found_content_length && content_length == 0)
-                finished_reading = true;
-            headerFields.push_back(line);
-            if (chunked == false && content_length == false)
-                finished_reading = true;
-        }
-        else
-        {
-            if (headerFields.size() == 0)
-                headerFields.push_back(line);
-            else
-            {
-                if (headerFields.back().back() != '\n')
-                {
-                    headerFields.back() += line;
-                }
-                else
-                {
-                    headerFields.push_back(line);
-                }
-            }
-            if (headerFields.back() == "\r\n" || headerFields.back() == "\r\n\r\n")
-            {
-                header_is_parsed = true;
-                if (is_post == true && chunked == false && found_content_length == false)
-                {
-                    finished_reading = true;
-                    return ;
-                }
-                if (chunked == false && content_length == 0)
-                    finished_reading = true;
-            }
-        }
-    }
-    else
+    it = std::search(main_vec.begin(), main_vec.end(), strPost.begin(), strPost.end());
+    if (it != main_vec.end())
+        is_post = true;
+    it = std::search(main_vec.begin(), main_vec.end(), strChunked.begin(), strChunked.end());
+    if (it != main_vec.end())
+        chunked = true;
+    it = std::search(main_vec.begin(), main_vec.end(), strContLength.begin(), strContLength.end());
+    if (it != main_vec.end())
+        content_length_exists = true;
+    if (is_post == true && chunked == false && content_length_exists == false)
+        return ; // needs to be handled
+
+    if (chunked == true)
     {
-        char *char_line = get_next_line(fd);
-        std::string line(char_line);
-        if (char_line != NULL)
-            line.pop_back(); /* remove /n */
-        free(char_line);
-        char_line = NULL;
-        if (chunked == false) {
-            if (request_body.size() < (size_t)content_length)
-                request_body += line;
-            else
-                finished_reading = true;
-        } else {
-            /* read until end of chunk */
-            request_body += line;
-            if (line == "0\r\n" || line == "0\r")
-            {
-                PRINT_HERE();
-                char_line = get_next_line(fd);
-                line = char_line;
-                free(char_line);
-                request_body += line;
-                finished_reading = true;
-            }
-        }
+        std::string crlf = "\r\n\r\n";
+        std::vector<char>::iterator it = std::search(crlf_it + 1, main_vec.end(), crlf.begin(), crlf.end());
+        if (it == main_vec.end())
+            return ;
+        finished_reading = true;
     }
+
+    // PARSING
+    finished_reading = true;
+    get_header_field();
+    get_body();
+    main_vec.clear();
+    LOG("HEADERFIELDS:");
+    for (size_t i = 0; i < headerFields.size(); ++i)
+        std::cout << headerFields[i];
+    LOG("REQUEST_BODY:");
+    LOG(request_body);
+    header_is_parsed = false;
+    content_length_exists = false;
+
+
+    // if (header_is_parsed == false)
+    // {
+    //     // LOG("\nfinished_readding = " << finished_reading);
+    //     // LOG("consider_body     = " << consider_body);
+    //     // LOG("getting_body      = " << getting_body);
+    //     char    *char_line = NULL;
+    //     // std::vector<char> buffer(4096);
+    //     std::string  line;
+
+    //     // MozzilaDeveloper
+
+    //     // read(fd, buffer.begin().base(), 4096);
+    //     char_line = get_next_line(fd);
+    //     // LOG("Line - " << char_line);
+    //     // std::cout << "ASCII - ";
+    //     // for (size_t i = 0; i < strlen(char_line); ++i)
+    //     //     printf("%d", char_line[i]);
+    //     // LOG("");
+    //     line = char_line;
+    //     // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
+    //     //     line += *it;
+    //     // line += '\0';
+    //     // LOG("line: " << line);
+    //     // std::cout << "ASCII - ";
+    //     // for (size_t i = 0; i < line.size(); ++i)
+    //     //     printf("%d ", line[i]);
+    //     // LOG(line);
+    //     free(char_line);
+    //     char_line = NULL;
+    //     /*
+    //         if we have \r\n\r\n -> parsed entire header
+    //             1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
+    //             2. Content-Length -> read until whole length is read
+    //             3. Return with 400
+    //         else
+    //             keep reading until header is parsed
+    //     */
+    //     if (is_post == false && line.find("POST") != std::string::npos)
+    //         is_post = true;
+    //     if (line.find("Transfer-Encoding: chunked") != std::string::npos)
+    //         chunked = true;
+    //     if (line.find("Content-Length") != std::string::npos)
+    //     {
+    //         found_content_length = true;
+    //         // content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
+    //     }
+    //     if (line == "\r\n" || line == "\r\n\r\n")
+    //     {
+    //         header_is_parsed = true;
+    //         if (is_post == true && chunked == false && found_content_length == false)
+    //         {
+    //             finished_reading = true;
+    //             headerFields.push_back(line);
+    //             return ;
+    //         }
+    //         if (found_content_length && content_length == 0)
+    //             finished_reading = true;
+    //         headerFields.push_back(line);
+    //         if (chunked == false && content_length == false)
+    //             finished_reading = true;
+    //     }
+    //     else
+    //     {
+    //         if (headerFields.size() == 0)
+    //             headerFields.push_back(line);
+    //         else
+    //         {
+    //             if (headerFields.back().back() != '\n')
+    //             {
+    //                 headerFields.back() += line;
+    //             }
+    //             else
+    //             {
+    //                 headerFields.push_back(line);
+    //             }
+    //         }
+    //         if (headerFields.back() == "\r\n" || headerFields.back() == "\r\n\r\n")
+    //         {
+    //             header_is_parsed = true;
+    //             if (is_post == true && chunked == false && found_content_length == false)
+    //             {
+    //                 finished_reading = true;
+    //                 return ;
+    //             }
+    //             if (chunked == false && content_length == 0)
+    //                 finished_reading = true;
+    //         }
+    //     }
+    // }
+    // else
+    // {
+    //     char *char_line = get_next_line(fd);
+    //     std::string line(char_line);
+    //     if (char_line != NULL)
+    //         line.pop_back(); /* remove /n */
+    //     free(char_line);
+    //     char_line = NULL;
+    //     if (chunked == false) {
+    //         if (request_body.size() < (size_t)content_length)
+    //             request_body += line;
+    //         else
+    //             finished_reading = true;
+    //     } else {
+    //         /* read until end of chunk */
+    //         request_body += line;
+    //         if (line == "0\r\n" || line == "0\r")
+    //         {
+    //             PRINT_HERE();
+    //             char_line = get_next_line(fd);
+    //             line = char_line;
+    //             free(char_line);
+    //             request_body += line;
+    //             finished_reading = true;
+    //         }
+    //     }
+    // }
     // LOG("Request header fields:");
     // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
     //     LOG(*it);
@@ -159,6 +245,7 @@ const t_server &configuration)
     is_post = false;
     content_length = 0;
     chunked = false;
+    content_length_exists = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -390,6 +477,7 @@ void server::handle_connection(int socket)
     finished_reading = false; 
     header_is_parsed = false;
     chunked = false;
+    content_length_exists = false;
     is_post = false;
     request_body.clear();
     struct sockaddr addr;

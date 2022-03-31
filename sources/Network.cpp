@@ -11,6 +11,8 @@ void Network::initNetwork(char *file_name)
 
 	start_timestamp_network = get_current_timestamp();
 
+    PRINT_HERE();
+
     for (size_t i = 0; i < configs.size(); i++)
     {
 	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses, &events, configs[i]);

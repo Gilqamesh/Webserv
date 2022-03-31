@@ -55,13 +55,17 @@ private:
     bool                                finished_reading;
     bool                                header_is_parsed;
     bool                                chunked;
+    bool                                content_length_exists;
     bool                                is_post;
     int                                 content_length;
     std::string                         request_body;
     std::vector<char>                   main_vec;
+    std::vector<char>::iterator         crlf_it;
 public:
 
     void            read_request(int fd);
+    void            get_header_field(void);
+    void            get_body(void);
     bool            check_first_line(std::string, http_request&);
     bool            check_prebody(std::string, http_request&);
 
