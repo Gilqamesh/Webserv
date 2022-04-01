@@ -104,18 +104,8 @@ http_request server::parse_request_header(int socket)
     }
     if (finished_reading == false)
         return (http_request::chunked_http_request());
-    LOG("\nmain_vec.size() = " << main_vec.size());
     main_vec.clear();
     start_body_pos = 0;
-
-    LOG("\nrequest_body.size() = " << request_body.size() << std::endl);
-
-    // LOG("HEADERFIELDS:");
-    for (size_t i = 0; i < headerFields.size(); ++i)
-        std::cout << headerFields[i];
-    // LOG("REQUEST_BODY:");
-    // std::cout << request_body;
-    PRINT_HERE();
 
     http_request request(false);
     request.socket = socket;
@@ -1199,8 +1189,6 @@ std::string     server::decoding_chunked(const std::string &chunked)
     int                 chunked_size;
     std::stringstream   ss;
     size_t              i = 0;
-    
-    LOG("chunked = \n" << chunked);
     
     while (true)
     {
