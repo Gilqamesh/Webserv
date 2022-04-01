@@ -739,6 +739,8 @@ std::string server::isAllowedDirectory3(const std::string &target)
         if (target.substr(0, cit->first.size()) == cit->first)
         {
             std::string path = cit->second.redirect;
+            if (path.size() == 0)
+                return ("");
             if (path.front() == '/')
                 path = path.substr(1);
             if (target.size() > cit->first.size())
