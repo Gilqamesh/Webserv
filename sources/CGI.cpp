@@ -1,6 +1,7 @@
 #include "header.hpp"
 #include "CGI.hpp"
 #include <vector>
+#include "utils.hpp"
 
 CGI::CGI(int pipe[2], http_request *httpRequest)
     : request(httpRequest)
@@ -56,10 +57,12 @@ void CGI::execute(void)
             char **env = (char **)malloc(sizeof(char *) * (1 + meta_variables.size()));
             env[meta_variables.size()] = NULL;
             size_t index = 0;
+            LOG_E("Meta variables");
             for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
             {
                 if (it->second.back() == '\n')
                     it->second.pop_back();
+                LOG(it->first << ": " << it->second);
                 env[index++] = strdup(std::string(it->first + "=" + it->second).c_str());
             }
             env[index] = NULL;
@@ -74,26 +77,49 @@ void CGI::execute(void)
                 TERMINATE("execve failed");
         }
         close(tmp_pipe2[WRITE_END]);
-        close(tmp_pipe2[READ_END]);
-        std::string cgiReturnStr;
-        while (1)
-        {
-            char buffer[10001];
-            int readAmount = read(tmp_pipe2[READ_END], buffer, 10000);
-            if (readAmount == -1)
-                TERMINATE("read failed");
-            buffer[readAmount] = '\0';
-            cgiReturnStr += buffer;
-            if (readAmount == 0)
-                break ;
-        }
-        wait(NULL);
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
-        cgiResponse += "Content-Length: " + std::to_string(cgiReturnStr.size()) + "\n";
+        // cgiResponse += "Content-Length: " + std::to_string(cgiReturnStr.size()) + "\n";
+        cgiResponse += "Transfer-Encoding: chunked\n";
         // cgiResponse += "Content-Length: 0\n";
         cgiResponse += "Connection: close\n";
         cgiResponse += "\n";
+        std::string cgiReturnStr;
+        while (1)
+        {
+            // char buffer[10001];
+            char *tmp = get_next_line(tmp_pipe2[READ_END]);
+            if (tmp == NULL)
+            {
+                cgiReturnStr += "\r\n0\r\n\r\n";
+                break ;
+            }
+            std::string tmpStr(tmp);
+            free(tmp);
+            std::stringstream ss;
+            ss << std::hex << tmpStr.size();
+            cgiReturnStr += ss.str() + "\r\n";
+            if (tmpStr.size() == 0)
+                break ;
+            cgiReturnStr += tmpStr;
+            // int readAmount = read(tmp_pipe2[READ_END], buffer, 10000);
+            // if (readAmount == -1)
+            //     TERMINATE("read failed");
+            // buffer[readAmount] = '\0';
+            // cgiReturnStr += buffer;
+            // if (readAmount == 0)
+            //     break ;
+        }
+        LOG_E("Chunked message: " << cgiReturnStr);
+        wait(NULL);
+        PRINT_HERE();
+        // std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
+        // cgiResponse += "Content-Type: text/html\n";
+        // // cgiResponse += "Content-Length: " + std::to_string(cgiReturnStr.size()) + "\n";
+        // cgiResponse += "Transfer-Encoding: chunked";
+        // // cgiResponse += "Content-Length: 0\n";
+        // cgiResponse += "Connection: close\n";
+        // cgiResponse += "\n";
         cgiResponse += cgiReturnStr;
         write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
         close(m_pipe[WRITE_END]);

@@ -109,7 +109,10 @@ http_request server::parse_request_header(int socket)
 
     http_request request(false);
     request.socket = socket;
-    request.payload = request_body;
+    if (chunked == true)
+        request.payload = decoding_chunked(request_body);
+    else
+        request.payload = request_body;
 
     // LOG("request_body = \n" << request_body);
     // LOG("request.payload = \n" << request.payload);
@@ -619,6 +622,7 @@ http_response server::format_http_response(http_request& request)
         std::string extension;
         if (pos != std::string::npos)
             extension = request.target.substr(pos);
+        request.extension = server_configuration.general_cgi_path;
         if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
             return (handle_post_request(request));
     }
@@ -953,7 +957,7 @@ void server::send_timeout(int socket)
 void server::add_script_meta_variables(CGI &script, const http_request &request)
 {
     // script.add_meta_variable("AUTH_TYPE", "");
-    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request_body.length()));
+    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
     if (request.header_fields.count("Content-Type"))
         script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
     script.add_meta_variable("PATH_INFO", cached_resources[request.target].path);
@@ -962,7 +966,8 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
+    // script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
+    script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file");
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);
@@ -970,7 +975,10 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     * script.add_meta_variable("REQUEST_USER", "");
     */
     script.add_meta_variable("REQUEST_METHOD", request.method_token);
-    script.add_meta_variable("SCRIPT_NAME", request.abs_path);
+    if (request.extension.empty() == false)
+        script.add_meta_variable("SCRIPT_NAME", request.extension);
+    else
+        script.add_meta_variable("SCRIPT_NAME", "." + request.abs_path);
     script.add_meta_variable("SERVER_NAME", this->hostname);
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
@@ -1036,6 +1044,7 @@ http_response server::handle_post_request(http_request &request)
     std::string extension;
     if (pos != std::string::npos)
         extension = request.target.substr(pos);
+    request.extension = server_configuration.general_cgi_path;
     if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
     {   /*
          * if general_cgi_extension exists in config file and the request resource matches this extension
@@ -1119,7 +1128,6 @@ http_response server::handle_post_request(http_request &request)
                 if (!uploaded_file)
                     WARN("Failed to create file: " + underLocation);
                 // LOG(request.payload);
-                request.payload = decoding_chunked(request.payload);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
                 http_response response;
@@ -1146,7 +1154,6 @@ http_response server::handle_post_request(http_request &request)
                 LOG("uploaded_file: " << uploaded_file);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + underLocation);
-                request.payload = decoding_chunked(request.payload);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
                 http_response response;

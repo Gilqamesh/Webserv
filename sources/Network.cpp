@@ -44,11 +44,12 @@ void Network::runNetwork()
                     char *curLine;
                     while ((curLine = get_next_line(*(int *)events[i].udata)))
                     {
-                        response += std::string(curLine);
+                        response = std::string(curLine);
+                        send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
                         free(curLine);
                     }
-                    LOG("CGI Response: " << response);
-                    send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+                    // LOG("CGI Response: " << response);
+                    // LOG("sendRet: " << sendRet);
                     /* cut connection with the client */
                     usleep(10000);
                     servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
