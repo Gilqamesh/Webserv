@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [13:21:50]  Client joined from socket: 8
 Log ID: 0
 [13:21:50]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
@@ -26,4 +27,12 @@ Log ID: 8
 Log ID: 9
 [13:21:50]  RESPONSE -> [status: 404 - Not Found]
 [13:21:50]  Client disconnected on socket: 8
+=======
+[12:38:15]  Client joined from socket: 8
+Log ID: 0
+[12:38:15]  REQUEST  -> [method: GET] [target: /redirectMe/] [version: HTTP/1.1]
+Log ID: 1
+[12:38:15]  RESPONSE -> [status: 301 - Moved Permanently]
+[12:38:15]  Client disconnected on socket: 8
+>>>>>>> 877ad96c1504473516343f692c011f04b57dfddb
 
