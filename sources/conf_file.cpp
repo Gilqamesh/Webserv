@@ -94,8 +94,8 @@ bool					conf_file::get_server_config(std::string &line)
 	{
 		if (_server_buf.port != -1)
 			error("port already exist");
-		std::string port = words[1].substr(0, words[1].find(':'));
-		_server_buf.host = words[1].substr(words[1].find(':') + 1, words[1].size() - _server_buf.host.size() - 1);
+		_server_buf.host = words[1].substr(0, words[1].find(':'));
+		std::string port = words[1].substr(words[1].find(':') + 1, words[1].size() - _server_buf.host.size() - 1);
 		if (!is_number(port))
 			error("wrong port");
 		_server_buf.port = std::stoi(port);
@@ -304,7 +304,7 @@ bool						conf_file::line_is_comment(std::string &line) const
 {
 	for (size_t i = 0; i < line.size(); i++)
 	{
-		if (line[i] == ' ')
+		if (isspace(line[i]))
 			continue ;
 		else if (line[i] == '#')
 			return (1);
