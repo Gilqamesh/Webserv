@@ -55,12 +55,17 @@ private:
     bool                                chunked;
     bool                                is_post;
     int                                 content_length;
+    size_t                              start_body_pos;
+    size_t                              nOfBytesRead;
     std::string                         request_body;
     std::vector<char>                   main_vec;
     t_server                            server_configuration;
 public:
 
     void            read_request(int fd);
+    void            get_header_fields(void);
+    void            get_header_infos(void);
+    void            get_body(void);
     bool            check_first_line(std::string, http_request&);
     bool            check_prebody(std::string, http_request&);
 

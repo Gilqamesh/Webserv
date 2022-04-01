@@ -1,83 +1,81 @@
-[20:15:16]  Client joined from socket: 8
+[13:26:45]  Client joined from socket: 8
 Log ID: 0
-[20:15:16]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
 Log ID: 1
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 2
-[20:15:16]  REQUEST  -> [method: POST] [target: /] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: POST] [target: /] [version: HTTP/1.1]
 Log ID: 3
-[20:15:16]  RESPONSE -> [status: 405 - Method Not Allowed]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:45]  RESPONSE -> [status: 405 - Method Not Allowed]
+[13:26:45]  Client disconnected on socket: 8
 
-[20:15:16]  Client joined from socket: 8
+[13:26:45]  Client joined from socket: 8
 Log ID: 4
-[20:15:16]  REQUEST  -> [method: HEAD] [target: /] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: HEAD] [target: /] [version: HTTP/1.1]
 Log ID: 5
-[20:15:16]  RESPONSE -> [status: 405 - Method Not Allowed]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:45]  RESPONSE -> [status: 405 - Method Not Allowed]
+[13:26:45]  Client disconnected on socket: 8
 
-[20:15:16]  Client joined from socket: 8
+[13:26:45]  Client joined from socket: 8
 Log ID: 6
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory] [version: HTTP/1.1]
 Log ID: 7
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 8
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/youpi.bad_extension] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/youpi.bad_extension] [version: HTTP/1.1]
 Log ID: 9
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 10
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/youpi.bla] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/youpi.bla] [version: HTTP/1.1]
 Log ID: 11
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 12
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/oulalala] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/oulalala] [version: HTTP/1.1]
 Log ID: 13
-[20:15:16]  RESPONSE -> [status: 404 - Not Found]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:45]  RESPONSE -> [status: 404 - Not Found]
+[13:26:45]  Client disconnected on socket: 8
 
-[20:15:16]  Client joined from socket: 8
+[13:26:45]  Client joined from socket: 8
 Log ID: 14
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/nop] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/nop] [version: HTTP/1.1]
 Log ID: 15
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 16
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/nop/] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/nop/] [version: HTTP/1.1]
 Log ID: 17
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 18
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouic] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouic] [version: HTTP/1.1]
 Log ID: 19
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:45]  RESPONSE -> [status: 200 - OK]
 Log ID: 20
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouac] [version: HTTP/1.1]
+[13:26:45]  REQUEST  -> [method: GET] [target: /directory/nop/other.pouac] [version: HTTP/1.1]
 Log ID: 21
-[20:15:16]  RESPONSE -> [status: 404 - Not Found]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:45]  RESPONSE -> [status: 404 - Not Found]
+[13:26:45]  Client disconnected on socket: 8
 
-[20:15:16]  Client joined from socket: 8
+[13:26:45]  Client joined from socket: 8
 Log ID: 22
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/Yeah] [version: HTTP/1.1]
+[13:26:46]  REQUEST  -> [method: GET] [target: /directory/Yeah] [version: HTTP/1.1]
 Log ID: 23
-[20:15:16]  RESPONSE -> [status: 404 - Not Found]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:46]  RESPONSE -> [status: 404 - Not Found]
+[13:26:46]  Client disconnected on socket: 8
 
-[20:15:16]  Client joined from socket: 8
+[13:26:46]  Client joined from socket: 8
 Log ID: 24
-[20:15:16]  REQUEST  -> [method: GET] [target: /directory/Yeah/not_happy.bad_extension] [version: HTTP/1.1]
+[13:26:46]  REQUEST  -> [method: GET] [target: /directory/Yeah/not_happy.bad_extension] [version: HTTP/1.1]
 Log ID: 25
-[20:15:16]  RESPONSE -> [status: 200 - OK]
+[13:26:46]  RESPONSE -> [status: 200 - OK]
 Log ID: 26
-[20:15:16]  REQUEST  -> [method: PUT] [target: /put_test/file_should_exist_after] [version: HTTP/1.1]
+[13:26:46]  REQUEST  -> [method: PUT] [target: /put_test/file_should_exist_after] [version: HTTP/1.1]
 Log ID: 27
-[20:15:16]  RESPONSE -> [status: 200 - OK]
-[20:15:16]  Client disconnected on socket: 8
+[13:26:46]  RESPONSE -> [status: 200 - OK]
+[13:26:46]  Client disconnected on socket: 8
 
-[20:15:32]  Client joined from socket: 8
+[13:27:11]  Client joined from socket: 8
 Log ID: 28
-[20:20:06]  REQUEST  -> [method: PUT] [target: /put_test/file_should_exist_after] [version: HTTP/1.1]
+[13:27:11]  RESPONSE -> [status: 400 - Bad Request]
 Log ID: 29
-[20:20:14]  RESPONSE -> [status: 200 - OK]
-Log ID: 30
-[20:20:14]  RESPONSE -> [status: 408 - Request Timeout]
-[20:20:14]  Client disconnected on socket: 8
+[13:27:12]  RESPONSE -> [status: 400 - Bad Request]
+[13:27:12]  Client disconnected on socket: 8
 

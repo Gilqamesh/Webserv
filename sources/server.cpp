@@ -1,132 +1,237 @@
 #include "server.hpp"
 #include "utils.hpp"
 #include <cstdio>
+#define READ_HTTP_BUFFER_SIZE 4194304
 
 /*
 * helper to initialize some constants
 */
+
 void    server::read_request(int fd)
 {   
 
-    if (header_is_parsed == false)
-    {
-        // LOG("\nfinished_readding = " << finished_reading);
-        // LOG("consider_body     = " << consider_body);
-        // LOG("getting_body      = " << getting_body);
-        char    *char_line = NULL;
-        // std::vector<char> buffer(4096);
-        std::string  line;
+    std::vector<char> tmp(READ_HTTP_BUFFER_SIZE);
 
-        // read(fd, buffer.begin().base(), 4096);
-        char_line = get_next_line(fd);
-        // LOG("Line - " << char_line);
-        // std::cout << "ASCII - ";
-        // for (size_t i = 0; i < strlen(char_line); ++i)
-        //     printf("%d", char_line[i]);
-        // LOG("");
-        line = char_line;
-        // for (std::vector<char>::iterator it = buffer.begin(); it != buffer.end() && *it != '\0'; ++it)
-        //     line += *it;
-        // line += '\0';
-        // LOG("line: " << line);
-        // std::cout << "ASCII - ";
-        // for (size_t i = 0; i < line.size(); ++i)
-        //     printf("%d ", line[i]);
-        // LOG(line);
-        free(char_line);
-        char_line = NULL;
-        /*
-            if we have \r\n\r\n -> parsed entire header
-                1. we either have Transfer-Encoding: chunked -> keep reading until special chunk
-                2. Content-Length -> read until whole length is read
-                3. Return with 400
-            else
-                keep reading until header is parsed
-        */
-        if (is_post == false && line.find("POST") != std::string::npos)
-            is_post = true;
-        if (line.find("Transfer-Encoding: chunked") != std::string::npos)
-            chunked = true;
-        if (line.find("Content-Length") != std::string::npos)
+    nOfBytesRead = read(fd, tmp.begin().base(), READ_HTTP_BUFFER_SIZE);
+    if (nOfBytesRead < READ_HTTP_BUFFER_SIZE)
+        finished_reading = true;
+    for (size_t i = 0; i < nOfBytesRead; ++i)
+        main_vec.push_back(tmp[i]);
+    tmp.clear();
+    
+    // if (header_is_parsed == false)
+    // {
+    //     char    *char_line = NULL;
+    //     std::string  line;
+    //     char_line = get_next_line(fd);
+    //     line = char_line;
+    //     free(char_line);
+    //     char_line = NULL;
+    //     if (is_post == false && line.find("POST") != std::string::npos)
+    //         is_post = true;
+    //     if (line.find("Transfer-Encoding: chunked") != std::string::npos)
+    //         chunked = true;
+    //     if (line.find("Content-Length") != std::string::npos)
+    //     {
+    //         found_content_length = true;
+    //     }
+    //     if (line == "\r\n" || line == "\r\n\r\n")
+    //     {
+    //         header_is_parsed = true;
+    //         if (is_post == true && chunked == false && found_content_length == false)
+    //         {
+    //             finished_reading = true;
+    //             headerFields.push_back(line);
+    //             return ;
+    //         }
+    //         if (found_content_length && content_length == 0)
+    //             finished_reading = true;
+    //         headerFields.push_back(line);
+    //         if (chunked == false && content_length == false)
+    //             finished_reading = true;
+    //     }
+    //     else
+    //     {
+    //         if (headerFields.size() == 0)
+    //             headerFields.push_back(line);
+    //         else
+    //         {
+    //             if (headerFields.back().back() != '\n')
+    //             {
+    //                 headerFields.back() += line;
+    //             }
+    //             else
+    //             {
+    //                 headerFields.push_back(line);
+    //             }
+    //         }
+    //         if (headerFields.back() == "\r\n" || headerFields.back() == "\r\n\r\n")
+    //         {
+    //             header_is_parsed = true;
+    //             if (is_post == true && chunked == false && found_content_length == false)
+    //             {
+    //                 finished_reading = true;
+    //                 return ;
+    //             }
+    //             if (chunked == false && content_length == 0)
+    //                 finished_reading = true;
+    //         }
+    //     }
+    // }
+    // else
+    // {
+    //     char *char_line = get_next_line(fd);
+    //     std::string line(char_line);
+    //     if (char_line != NULL)
+    //         line.pop_back(); /* remove /n */
+    //     free(char_line);
+    //     char_line = NULL;
+    //     if (chunked == false) {
+    //         if (request_body.size() < (size_t)content_length)
+    //             request_body += line;
+    //         else
+    //             finished_reading = true;
+    //     } else {
+    //         /* read until end of chunk */
+    //         request_body += line;
+    //         if (line == "0\r\n" || line == "0\r")
+    //         {
+    //             PRINT_HERE();
+    //             char_line = get_next_line(fd);
+    //             line = char_line;
+    //             free(char_line);
+    //             request_body += line;
+    //             finished_reading = true;
+    //         }
+    //     }
+    // }
+}
+
+void    server::get_header_fields(void)
+{
+    headerFields.clear();
+    std::string tmp;
+    for (size_t i = 0; i < main_vec.size(); ++i)
+    {
+        tmp += main_vec[i];
+        if (main_vec[i] == '\n')
         {
-            found_content_length = true;
-            // content_length = std::stoi(line.c_str() + std::strlen("Content-Length") + 1);
-        }
-        if (line == "\r\n" || line == "\r\n\r\n")
-        {
-            header_is_parsed = true;
-            if (is_post == true && chunked == false && found_content_length == false)
+            headerFields.push_back(tmp);
+            tmp.clear();
+            if (headerFields.back() == "\r\n")
             {
-                finished_reading = true;
-                headerFields.push_back(line);
+                start_body_pos = i++;
+                header_is_parsed = true;
                 return ;
             }
-            if (found_content_length && content_length == 0)
-                finished_reading = true;
-            headerFields.push_back(line);
-            if (chunked == false && content_length == false)
-                finished_reading = true;
+        }
+    }
+}
+
+void    server::get_header_infos(void)
+{
+    for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+    {
+        if ((*it).find("POST") != std::string::npos)
+            is_post = true;
+        else if ((*it).find("Transfer-Encoding: chunked") != std::string::npos)
+            chunked = true;
+        else if ((*it).find("Content-Length") != std::string::npos)
+            found_content_length = true; 
+    } 
+}
+
+void    server::get_body(void)
+{
+    request_body.clear();
+    for (; start_body_pos != nOfBytesRead; ++start_body_pos)
+        request_body += main_vec[start_body_pos];
+}
+
+http_request server::parse_request_header(int socket)
+{  
+    read_request(socket);
+    if (finished_reading == false)
+        return (http_request::chunked_http_request());
+    if (header_is_parsed == false)
+    {
+        get_header_fields();
+        if (header_is_parsed == false)
+            return (http_request::chunked_http_request());
+        get_header_infos();
+        if (is_post == true && chunked == false && found_content_length == false)
+        {
+            LOG("here");
+            return (http_request::reject_http_request());
+        }
+    }
+    if (chunked == true)
+    {
+        std::vector<char>::iterator it = main_vec.end();
+        LOG("ASCII");
+        for (std::vector<char>::iterator it2 = main_vec.begin(); it2 != main_vec.end(); ++it2)
+            printf("[%d] ", *it2);
+        LOG("");
+        if (*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r' && *(it - 5) == '0')
+        {
+            get_body();
         }
         else
         {
-            if (headerFields.size() == 0)
-                headerFields.push_back(line);
-            else
-            {
-                if (headerFields.back().back() != '\n')
-                {
-                    headerFields.back() += line;
-                }
-                else
-                {
-                    headerFields.push_back(line);
-                }
-            }
-            if (headerFields.back() == "\r\n" || headerFields.back() == "\r\n\r\n")
-            {
-                header_is_parsed = true;
-                if (is_post == true && chunked == false && found_content_length == false)
-                {
-                    finished_reading = true;
-                    return ;
-                }
-                if (chunked == false && content_length == 0)
-                    finished_reading = true;
-            }
+            LOG("HERE");
+            return (http_request::reject_http_request());
         }
     }
     else
+        get_body();
+    main_vec.clear();
+    start_body_pos = 0;
+
+    LOG("HEADERFIELDS:");
+    for (size_t i = 0; i < headerFields.size(); ++i)
+        std::cout << headerFields[i];
+    LOG("REQUEST_BODY:");
+    std::cout << request_body;
+    PRINT_HERE();
+
+    http_request request(false);
+    request.socket = socket;
+    request.payload = request_body;
+    if (check_first_line(headerFields[0], request) == false)
     {
-        char *char_line = get_next_line(fd);
-        std::string line(char_line);
-        if (char_line != NULL)
-            line.pop_back(); /* remove /n */
-        free(char_line);
-        char_line = NULL;
-        if (chunked == false) {
-            if (request_body.size() < (size_t)content_length)
-                request_body += line;
-            else
-                finished_reading = true;
-        } else {
-            /* read until end of chunk */
-            request_body += line;
-            if (line == "0\r\n" || line == "0\r")
-            {
-                PRINT_HERE();
-                char_line = get_next_line(fd);
-                line = char_line;
-                free(char_line);
-                request_body += line;
-                finished_reading = true;
-            }
-        }
+        PRINT_HERE();
+        return (http_request::reject_http_request());
     }
-    // LOG("Request header fields:");
-    // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
-    //     LOG(*it);
-    // LOG("finished_readding_end = " << finished_reading);
-    // LOG("header_is_parsed      = " << header_is_parsed);
+
+    size_t i = 1;
+    std::string current_line;
+    while (true)
+    {
+        if (headerFields[i] == "\r\n" || headerFields[i] == "\n" || headerFields[i] == "\r")
+            break ; /* end of header */
+        if (check_prebody(headerFields[i], request) == false)
+        {
+            PRINT_HERE();
+            return (http_request::reject_http_request());
+        }
+        ++i;
+    }
+
+    if (request.header_fields.count("Host") == 0)
+    {
+        PRINT_HERE();
+        return (http_request::reject_http_request());
+    }
+    request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
+    request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
+    if (request.target.find_first_of('?') != std::string::npos)
+        request.query = request.target.substr(request.target.find_first_of('?') + 1);
+    request.URI = request.scheme + ":" + request.net_path;
+    if (request.query.length())
+        request.URI += "?" + request.query;
+    LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    return (request);
 }
 
 void server::initialize_constants(void)
@@ -160,6 +265,7 @@ const t_server &configuration)
     is_post = false;
     content_length = 0;
     chunked = false;
+    start_body_pos = 0;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         std::string newRoute = locations[i].route;
@@ -168,30 +274,12 @@ const t_server &configuration)
         sortedRoutes[newRoute] = locations[i];
     }
 	initialize_constants();
-
-    /* creating a socket (domain/address family, type of service, specific protocol)
-    * AF_INET       -   IP address family
-    * SOCK_STREAM   -   virtual circuit service
-    * 0             -   only 1 protocol exists for this service
-    */
     server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket_fd == -1)
         TERMINATE("failed to create a socket");
     
-    /* set socket opt
-    * SO_REUSEADDR allows us to reuse the specific port even if that port is busy
-    */
     if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &server_socket_fd, sizeof(int)) == -1)
         TERMINATE("setsockopt failed");
-
-    /* binding/naming the socket
-    * 1. fill out struct sockaddr_in
-    *   sin_family    -   address family used for the socket
-    *   sin_addr      -   address for the socket, it's the machine's IP address
-    *                 -   INADDR_ANY is a special address 0.0.0.0
-    *   sin_port      -   port number, if you are client set it to 0 to let the OS decide
-    * 2. bind the socket (socket, socket address, address length)
-    */
     struct sockaddr_in address;
     std::memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
@@ -205,11 +293,6 @@ const t_server &configuration)
     inet_ntop(AF_INET, &address.sin_addr, buffer, INET_ADDRSTRLEN);
     hostname = buffer;
 
-    /* wait/listen for connection
-    * listen(socket, backlog)
-    *   the backlog defines the maximum number of pending connections that can be queued up
-    *   before connections are refused
-    */
     if (listen(server_socket_fd, server_backlog) == -1)
         TERMINATE("listen failed");
     // LOG("Server listens on port: " << server_port);
@@ -235,15 +318,6 @@ const t_server &configuration)
     add_resource(error_page);
 }
 
-/*
-* server::add_resource() should be used in the future for this purpose
-*
-* load a file from 'path' to match a specific 'route' (URL)
-* NEED: content-type for resource
-* NEED: allowed_methods coming from config file
-* NEED: specify if resource is served statically or dynamically, in which case script_path also needs to be provided
-* OPTIONAL: content-encoding, content_language, content-location
-*/
 void server::cache_file()
 {
     for (unsigned int i = 0; i < locations.size(); ++i)
@@ -304,39 +378,15 @@ int server::accept_connection(void)
     int new_socket = accept(server_socket_fd, (struct sockaddr *)&addr, &socklen);
     if (new_socket == -1)
         TERMINATE("'accept' failed");
-
-    /* register event for reading on socket */
     events->addReadEvent(new_socket);
-
-	/* register timeout for the socket
-    * the idea with this is that this event will be updated on incoming requests
-    * so it only triggers if there wasn't a request for the specified time
-    */
     events->addTimeEvent(new_socket, TIMEOUT_TO_CUT_CONNECTION * 1000);
-    /* turn on non-blocking behavior for this file descriptor
-    * any function that would be blocking with this file descriptor will instead not block
-    * and return with -1 with errno set to EWOULDBLOCK
-    */
     if (fcntl(new_socket, F_SETFL, O_NONBLOCK) == -1)
         TERMINATE("'fcntl' failed");
-    // connected_sockets_map.insert(std::pair<int,int>(socket, new_socket));
-    // identifyServerSocket.insert(std::pair<int,int>(new_socket, socket));
-
-//    LOG_TIME("Client joined from socket: " << new_socket);
     LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
     NETWORK_LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
    return new_socket;
 }
 
-/*
-* close and delete 'socket' from the connection list
-// for the below problem the shutdown() function would be a solution but it's not allowed
-// * To avoid TCP reset problem (RFC7230/6.6) the connection is closed in stages
-// *   first, half-close by closing only the write side of the read/write connection
-// *   then continue to read from the connection until receiving a corresponding close by the client
-// *       or until we are reasonably certain that the client has received the server's last response
-// *   lastly, fully close the connection
-*/
 void server::cut_connection(int socket)
 {
     LOG("Socket: " << socket);
@@ -349,24 +399,16 @@ void server::cut_connection(int socket)
 
     if (socket == server_socket_fd)
     {
-        // LOG_TIME("Server disconnected on socket: " << socket);
         LOG(displayTimestamp() << " Server disconnected on socket: " << socket);
         NETWORK_LOG(displayTimestamp() << " Server disconnected on socket: " << socket << std::endl);
     }
     else
     {
-        // LOG_TIME("Client disconnected on socket: " << socket);
         LOG(displayTimestamp() << " Client disconnected on socket: " << socket);
         NETWORK_LOG(displayTimestamp() << " Client disconnected on socket: " << socket << std::endl);
     }
 }
 
-/* handle the ready to read/write socket
-* 1. Parse request (without body currently)
-* 2. Format response
-* 3. Send response to 'router' or respond later
-* 4. After responding close connection if needed
-*/
 void server::handle_connection(int socket)
 {
     http_request request = parse_request_header(socket);
@@ -413,16 +455,6 @@ void server::handle_connection(int socket)
 
 bool    server::check_first_line(std::string current_line, http_request &request)
 {
-    // if (current_line == CRLF) /* RFC7230/3.5. In the interest of robustness... */
-    // {
-    //     curLine = get_next_line(socket);
-    //     if (curLine == NULL)
-    //         return (http_request::reject_http_request());
-    //     current_line = curLine;
-    //     free(curLine);
-    // }
-    // LOG("current_line: " << current_line);
-    // LOG("match(current_line, HEADER_REQUEST_LINE_PATTERN): " << match(current_line, HEADER_REQUEST_LINE_PATTERN));
     LOG("current line: " << current_line);
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
     {
@@ -439,12 +471,6 @@ bool    server::check_first_line(std::string current_line, http_request &request
     constructedTarget = isAllowedDirectory(request.target);
     if (constructedTarget.size() && fileExists(constructedTarget) == 2 && request.target.back() != '/')
         request.target += "/";
-    // LOG("Request.target: " << request.target << ", protocol version: " + request.protocol_version);
-
-    // LOG("Method token: '" << request.method_token << "'");
-    // LOG("Target: '" << request.target << "'");
-    // LOG("Protocol version: '" << request.protocol_version << "'");
-
     return true;
 }
 
@@ -471,97 +497,6 @@ bool            server::check_prebody(std::string current_line,  http_request &r
     else
         request.header_fields[field_name] = field_value; 
     return true;
-}
-
-
-
-/* Request format (RFC7230/3.)
-* Fills in http_request object and returns it
-* 1. start-line (request-line for request, status-line for response)
-* 2. *( header-field CRLF)
-* 3. CRLF
-* 4. optional request-body/payload
-*
-* Construct absolute URI RFC2396/3.
-*/
-http_request server::parse_request_header(int socket)
-{  
-    read_request(socket);
-    if (finished_reading == false)
-        return (http_request::chunked_http_request());
-
-    // LOG("Request header fields:");
-    // for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
-    //     std::cout << (*it);
-    // LOG("request_body:");
-    // LOG(request_body);
-    // LOG("");
-    
-    http_request request(false);
-    request.socket = socket;
-    request.payload = request_body;
-    if (check_first_line(headerFields[0], request) == false)
-    {
-        PRINT_HERE();
-        return (http_request::reject_http_request());
-    }
-
-    // LOG("Method token: '" << request.method_token << "'");
-    // LOG("Target: '" << request.target << "'");
-    // LOG("Protocol version: '" << request.protocol_version << "'");
-
-    /* Read and store request line
-    * syntax checking for the request line happens here (RFC7230/3.1.1.)
-    */
-
-    /* Read and store header fields
-    * store each key value pair in 'header_fields'
-    * appending field-names that are of the same name happens here (RFC7230/3.2.2.)
-    * syntax checking for the header fields happens here
-    * if wrong syntax: server must reject the request, proxy should remove the wrongly formatted header field
-    * bad (BWS) and optional whitespaces (OWS) are getting removed here
-    */
-    /* Header field format (RFC7230/3.2.)
-    * field-name ":" OWS field-value OWS 
-    */
-
-    size_t i = 1;
-    std::string current_line;
-    while (true)
-    {
-        if (headerFields[i] == "\r\n" || headerFields[i] == "\n" || headerFields[i] == "\r")
-            break ; /* end of header */
-        if (check_prebody(headerFields[i], request) == false)
-        {
-            PRINT_HERE();
-            return (http_request::reject_http_request());
-        }
-        ++i;
-    }
-
-    if (request.header_fields.count("Host") == 0)
-    {
-        PRINT_HERE();
-        return (http_request::reject_http_request());
-    }
-    request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
-    request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
-    if (request.target.find_first_of('?') != std::string::npos)
-        request.query = request.target.substr(request.target.find_first_of('?') + 1);
-    request.URI = request.scheme + ":" + request.net_path;
-    if (request.query.length())
-        request.URI += "?" + request.query;
-    // LOG("Abs path: " << request.abs_path);
-    // LOG("Net path: " << request.net_path);
-    // LOG("Query: " << request.query);
-    // LOG("URI: " << request.URI);
-    // ----
-
-    // LOG("Payload: " << request.payload);
-
-    LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
-    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
-    return (request);
 }
 
 /*
@@ -603,48 +538,6 @@ void server::format_http_request(http_request& request)
         assert(false); /* protocol version is not properly parsed or a case is not handled */
 }
 
-/* REQUEST CONTROLS */
-
-void            server::request_control_cache_control(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_expect(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_host(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_max_forwards(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_pragma(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_range(http_request &request)
-{
-    (void)request;
-}
-
-void            server::request_control_TE(http_request &request)
-{
-    (void)request;
-}
-
-/*
-* construct path and returns it if 'target' is under a directory that is set up to server from the
-* configuration file for this server
-* returns empty string if 'target' is not subdirectory of any locations in the server
-*/
 std::string server::isAllowedDirectory(const std::string &target)
 {
     for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
@@ -707,6 +600,44 @@ std::string server::isAllowedDirectory2(const std::string &target)
         }
     }
     return ("");
+}
+
+
+/* REQUEST CONTROLS */
+
+void            server::request_control_cache_control(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_expect(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_host(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_max_forwards(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_pragma(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_range(http_request &request)
+{
+    (void)request;
+}
+
+void            server::request_control_TE(http_request &request)
+{
+    (void)request;
 }
 
 /* Constructs http_response
