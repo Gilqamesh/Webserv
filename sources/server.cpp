@@ -7,7 +7,6 @@
 */
 void    server::read_request(int fd)
 {   
-
     if (header_is_parsed == false)
     {
         // LOG("\nfinished_readding = " << finished_reading);
@@ -99,11 +98,11 @@ void    server::read_request(int fd)
     {
         char *char_line = get_next_line(fd);
         std::string line(char_line);
-        if (char_line != NULL)
-            line.pop_back(); /* remove /n */
         free(char_line);
         char_line = NULL;
         if (chunked == false) {
+            if (char_line != NULL)
+                line.pop_back(); /* remove /n */
             if (request_body.size() < (size_t)content_length)
                 request_body += line;
             else
@@ -119,6 +118,10 @@ void    server::read_request(int fd)
                 free(char_line);
                 request_body += line;
                 finished_reading = true;
+                request_body = decoding_chunked(request_body);
+                // LOG("ASCII");
+                // for (std::string::iterator it = request_body.begin(); it != request_body.end(); ++it)
+                //     printf("[%d]", *it);
             }
         }
     }
@@ -162,6 +165,7 @@ const t_server &configuration)
     chunked = false;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
+        // LOG("Redirect for route " + locations[i].route + ": " + locations[i].redirect);
         std::string newRoute = locations[i].route;
         if (newRoute.back() == '/')
             newRoute = newRoute.substr(0, newRoute.size() - 1);
@@ -372,6 +376,15 @@ void server::handle_connection(int socket)
     http_request request = parse_request_header(socket);
     if (request.reject == false && finished_reading == false)
         return ;
+    LOG("Request target: " << request.target);
+    std::string redirectionStr = isAllowedDirectory3(request.target);
+    LOG("isAllowedDirectory3(request.target): " << redirectionStr);
+    if (redirectionStr.size()) { /* redirect client to reformatted target */
+        request.redirected = true;
+        request.target = redirectionStr;
+    } else {
+        request.redirected = false;
+    }
     std::string httpRequest;
     for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
         httpRequest += *it;
@@ -709,6 +722,33 @@ std::string server::isAllowedDirectory2(const std::string &target)
     return ("");
 }
 
+/*
+ * Returns substituted path if 'target' needs to be redirected
+ * Empty str if doesn't need to be redirected
+ */
+std::string server::isAllowedDirectory3(const std::string &target)
+{
+    for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
+    {
+        // cit->second.redirect == /location2
+        // cit->first == /error
+        // target == /error/lol/asd.txt
+        // path = location2/lol/asd.txt
+        if (cit->first == "")
+            return ("");
+        if (target.substr(0, cit->first.size()) == cit->first)
+        {
+            std::string path = cit->second.redirect;
+            if (path.front() == '/')
+                path = path.substr(1);
+            if (target.size() > cit->first.size())
+                path += target.substr(cit->first.size());
+            return (path);
+        }
+    }
+    return ("");
+}
+
 /* Constructs http_response
 * 1. Construct Status Line
 *   1.1. HTTP-version
@@ -737,8 +777,14 @@ http_response server::format_http_response(http_request& request)
             cached_resources[request.target].allowed_methods.insert("GET");
             cached_resources[request.target].is_static = true;
             /* add this to the cached_resources */
-            response.status_code = "200";
-            response.reason_phrase = "OK";
+            if (request.redirected == false) {
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+            } else {
+                /* Redirect: Moved permanently */
+                response.status_code = "301";
+                response.reason_phrase = "Moved Permanently";
+            }
             int fd;
             if ((fd = open(constructedPath.c_str(), O_RDONLY)) == -1)
                 return (http_response::reject_http_response());
@@ -767,9 +813,15 @@ http_response server::format_http_response(http_request& request)
         response.status_code = "501";
         response.reason_phrase = "Not Implemented";
         response.header_fields["Connection"] = "close";
-    } else { /* 200 */
-        response.status_code = "200";
-        response.reason_phrase = "OK";
+    } else { /* OK/Redirect */
+        if (request.redirected == false) {
+            response.status_code = "200";
+            response.reason_phrase = "OK";
+        } else {
+            /* Redirect: Moved permanently */
+            response.status_code = "301";
+            response.reason_phrase = "Moved Permanently";
+        }
     }
 
     if (request.method_token == "DELETE" && cached_resources[request.target].allowed_methods.count("DELETE"))
@@ -778,8 +830,14 @@ http_response server::format_http_response(http_request& request)
         {
             if (std::remove(cached_resources[request.target].path.c_str()) == 0)
             {
-                response.status_code = "200";
-                response.reason_phrase = "OK";
+                if (request.redirected == false) {
+                    response.status_code = "200";
+                    response.reason_phrase = "OK";
+                } else {
+                    /* Redirect: Moved permanently */
+                    response.status_code = "301";
+                    response.reason_phrase = "Moved Permanently";
+            }
             }
             else
             {
@@ -844,7 +902,7 @@ http_response server::format_http_response(http_request& request)
         events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
         return (http_response::reject_http_response());
     }
-    if (match(response.status_code, "2..") == true) {
+    if (match(response.status_code, "[23]..") == true) {
         if (response.header_fields.count("Content-Length"))
         {
             if (request.method_token == "DELETE")
@@ -1202,8 +1260,14 @@ http_response server::handle_post_request(http_request &request)
                 LOG("request.payload: " << request.payload);
                 http_response response;
                 response.http_version = "HTTP/1.1";
-                response.status_code = "200";
-                response.reason_phrase = "OK";
+                if (request.redirected == false) {
+                    response.status_code = "200";
+                    response.reason_phrase = "OK";
+                } else {
+                    /* Redirect: Moved permanently */
+                    response.status_code = "301";
+                    response.reason_phrase = "Moved Permanently";
+                }
                 response.header_fields["Content-Type"] = "text/html";
                 response.header_fields["Content-Length"] = std::to_string(request.payload.size());
                 response.header_fields["Connection"] = "close";
@@ -1221,8 +1285,14 @@ http_response server::handle_post_request(http_request &request)
                 LOG("request.payload: " << request.payload);
                 http_response response;
                 response.http_version = "HTTP/1.1";
-                response.status_code = "200";
-                response.reason_phrase = "OK";
+                if (request.redirected == false) {
+                    response.status_code = "200";
+                    response.reason_phrase = "OK";
+                } else {
+                    /* Redirect: Moved permanently */
+                    response.status_code = "301";
+                    response.reason_phrase = "Moved Permanently";
+                }
                 response.header_fields["Content-Type"] = "text/html";
                 response.header_fields["Content-Length"] = std::to_string(request.payload.size());
                 response.header_fields["Connection"] = "close";
@@ -1243,4 +1313,28 @@ http_response server::handle_post_request(http_request &request)
     response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
     response.payload = cached_resources["/error"].content;
     return (response);
+}
+
+std::string    server::decoding_chunked(const std::string &chunked)
+{
+    std::string unchunked;
+    // get chunked-hexdecimal size
+    std::string hexdec_size;
+    for (size_t i = 0; chunked[i] != '\r' && chunked[i] != ' '; i++)
+        hexdec_size += chunked[i];
+    // transform chunk-size from hexdezimal to decimal
+    int chunked_size;
+    std::stringstream ss;
+    ss << std::hex << hexdec_size;
+    ss >> chunked_size;
+    if (chunked_size < 1)
+        return ("");
+    // getting to body;
+    int i = 0;
+    while (chunked[i] != '\n')
+        i++;
+    // read chunked body
+    for (int j = 0; j < chunked_size; ++j)
+        unchunked += chunked[++i];
+    return unchunked;
 }

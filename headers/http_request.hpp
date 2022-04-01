@@ -35,6 +35,7 @@ struct http_request
     std::string                                     abs_path;
     std::string                                     query;
 
+    bool                                            redirected;
     int                                             socket; /* request is read from this socket */
 };
 
