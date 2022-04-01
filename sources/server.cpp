@@ -762,7 +762,7 @@ http_response server::format_http_response(http_request& request)
         script.execute();
         close(cgi_pipe[WRITE_END]);
         /* register an event for this socket */
-        events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
+        // events->addReadEvent(cgi_pipe[READ_END], (int *)&cgi_responses->find(cgi_pipe[READ_END])->first);
         return (http_response::reject_http_response());
     }
     if (match(response.status_code, "[23]..") == true) {
@@ -1067,9 +1067,9 @@ http_response server::handle_post_request(http_request &request)
         script.execute();
         close(cgi_pipe[WRITE_END]);
         /* register an event for this socket */
-        int *a = (int *)malloc(sizeof(int));
-        *a = cgi_pipe[READ_END];
-        events->addReadEvent(cgi_pipe[READ_END], a);
+        // int *a = (int *)malloc(sizeof(int));
+        // *a = cgi_pipe[READ_END];
+        // events->addReadEvent(cgi_pipe[READ_END], a);
         PRINT_HERE();
         return (http_response::cgi_response());
     }
@@ -1111,9 +1111,9 @@ http_response server::handle_post_request(http_request &request)
             script.execute();
             close(cgi_pipe[WRITE_END]);
             /* register an event for this socket */
-            int *a = (int *)malloc(sizeof(int));
-            *a = cgi_pipe[READ_END];
-            events->addReadEvent(cgi_pipe[READ_END], a);
+            // int *a = (int *)malloc(sizeof(int));
+            // *a = cgi_pipe[READ_END];
+            // events->addReadEvent(cgi_pipe[READ_END], a);
             return (http_response::cgi_response());
         }
         for (std::vector<std::string>::iterator it = sortedRoutes[location].methods.begin();

@@ -35,35 +35,35 @@ void Network::runNetwork()
         for (int i = 0; i < nev; ++i)
         {
             int fd = events[i].ident;
-            if (events[i].udata != NULL) /* CGI fd */
-            {
-                assert(cgi_responses.count(*(int *)events[i].udata) != 0);
-                if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
-                {
-                    std::string response;
-                    char *curLine;
-                    while ((curLine = get_next_line(*(int *)events[i].udata)))
-                    {
-                        response = std::string(curLine);
-                        send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
-                        free(curLine);
-                    }
-                    // LOG("CGI Response: " << response);
-                    // LOG("sendRet: " << sendRet);
-                    /* cut connection with the client */
-                    usleep(10000);
-                    servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
-                }
-                PRINT_HERE();
-                /* remove client socket from 'sockets' */
-                sockets.erase(cgi_responses[*(int *)events[i].udata]);
-                /*  */
-                cgi_responses.erase(*(int *)events[i].udata);
-                close(*(int *)events[i].udata);
-                free(events[i].udata);
-                events[i].udata = NULL;
-                continue ;
-            }
+            // if (events[i].udata != NULL) /* CGI fd */
+            // {
+            //     assert(cgi_responses.count(*(int *)events[i].udata) != 0);
+            //     if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
+            //     {
+            //         std::string response;
+            //         char *curLine;
+            //         while ((curLine = get_next_line(*(int *)events[i].udata)))
+            //         {
+            //             response = std::string(curLine);
+            //             send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+            //             free(curLine);
+            //         }
+            //         // LOG("CGI Response: " << response);
+            //         // LOG("sendRet: " << sendRet);
+            //         /* cut connection with the client */
+            //         usleep(10000);
+            //         servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
+            //     }
+            //     PRINT_HERE();
+            //     /* remove client socket from 'sockets' */
+            //     sockets.erase(cgi_responses[*(int *)events[i].udata]);
+            //     /*  */
+            //     cgi_responses.erase(*(int *)events[i].udata);
+            //     close(*(int *)events[i].udata);
+            //     free(events[i].udata);
+            //     events[i].udata = NULL;
+            //     continue ;
+            // }
             if (servers.count(fd)) /* if 'fd' is a server socket -> accept connection */
             {
                 int new_socket;
