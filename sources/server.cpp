@@ -54,8 +54,16 @@ void    server::get_header_infos(void)
 void    server::get_body(void)
 {
     request_body.clear();
-    for (; start_body_pos != nOfBytesRead; ++start_body_pos)
-        request_body += main_vec[start_body_pos];
+    if (finished_reading == true)
+    {
+        for (; start_body_pos != main_vec.size(); ++start_body_pos)
+            request_body += main_vec[start_body_pos];
+    }
+    else
+    {
+        for (; start_body_pos != nOfBytesRead; ++start_body_pos)
+            request_body += main_vec[start_body_pos];
+    }
 }
 
 http_request server::parse_request_header(int socket)
@@ -96,8 +104,11 @@ http_request server::parse_request_header(int socket)
     }
     if (finished_reading == false)
         return (http_request::chunked_http_request());
+    LOG("\nmain_vec.size() = " << main_vec.size());
     main_vec.clear();
     start_body_pos = 0;
+
+    LOG("\nrequest_body.size() = " << request_body.size() << std::endl);
 
     // LOG("HEADERFIELDS:");
     for (size_t i = 0; i < headerFields.size(); ++i)
@@ -109,6 +120,10 @@ http_request server::parse_request_header(int socket)
     http_request request(false);
     request.socket = socket;
     request.payload = request_body;
+
+    // LOG("request_body = \n" << request_body);
+    // LOG("request.payload = \n" << request.payload);
+
     if (check_first_line(headerFields[0], request) == false)
     {
         PRINT_HERE();
@@ -1113,6 +1128,8 @@ http_response server::handle_post_request(http_request &request)
                 LOG("underLocation: " << underLocation);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + underLocation);
+                // LOG(request.payload);
+                request.payload = decoding_chunked(request.payload);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
                 http_response response;
@@ -1139,6 +1156,7 @@ http_response server::handle_post_request(http_request &request)
                 LOG("uploaded_file: " << uploaded_file);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + underLocation);
+                request.payload = decoding_chunked(request.payload);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
                 http_response response;
@@ -1174,13 +1192,16 @@ http_response server::handle_post_request(http_request &request)
     return (response);
 }
 
-std::string    decoding_chunked(std::string chunked)
+std::string     server::decoding_chunked(const std::string &chunked)
 {
     std::string         unchunked = "";
     std::string         hexdec_size;
     int                 chunked_size;
     std::stringstream   ss;
     size_t              i = 0;
+    
+    LOG("chunked = \n" << chunked);
+    
     while (true)
     {
         // get chunked-hexdecimal size
