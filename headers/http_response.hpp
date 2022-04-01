@@ -9,7 +9,8 @@ struct http_response
     http_response();
     ~http_response();
 
-    static http_response reject_http_response(void);
+    static http_response reject_http_response();
+    static http_response cgi_response();
 
     /* Status Line RFC7230/3.1.2. */
     std::string                                     http_version;
@@ -20,6 +21,7 @@ struct http_response
     std::string                                     payload; /* message body RFC7230/3.3.*/
 
     bool                                            reject;
+    bool                                            handled_by_cgi;
 };
 
 #endif

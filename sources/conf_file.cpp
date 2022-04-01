@@ -94,8 +94,8 @@ bool					conf_file::get_server_config(std::string &line)
 	{
 		if (_server_buf.port != -1)
 			error("port already exist");
-		_server_buf.host = words[1].substr(0, words[1].find(':'));
-		std::string port = words[1].substr(words[1].find(':') + 1, words[1].size() - _server_buf.host.size() - 1);
+		std::string port = words[1].substr(0, words[1].find(':'));
+		_server_buf.host = words[1].substr(words[1].find(':') + 1, words[1].size() - _server_buf.host.size() - 1);
 		if (!is_number(port))
 			error("wrong port");
 		_server_buf.port = std::stoi(port);
@@ -111,6 +111,18 @@ bool					conf_file::get_server_config(std::string &line)
 		if (_server_buf.client_max_body_size != -1)
 			error("client_max_body_size already exist");
 		_server_buf.client_max_body_size = convert_to_bytes(words[1]);
+	}
+	else if (words.size() == 2 && words.front() == "general_cgi_extension")
+	{
+		if (!_server_buf.general_cgi_extension.empty())
+			error("general_cgi_extension already exist");
+		_server_buf.general_cgi_extension = words[1];
+	}
+	else if (words.size() == 2 && words.front() == "general_cgi_path")
+	{
+		if (!_server_buf.general_cgi_path.empty())
+			error("general_cgi_path already exist");
+		_server_buf.general_cgi_path = words[1];
 	}
 	else
 		error("wrong config name - " + line);
@@ -206,8 +218,14 @@ void						conf_file::update_server_buffer()
 		_server_buf.locations.clear();
 	if (!_server_buf.server_name.empty())
 		_server_buf.server_name.clear();
+	if (!_server_buf.host.empty())
+		_server_buf.host.clear();
 	if (!_server_buf.error_page.empty())
 		_server_buf.error_page.clear();
+	if (!_server_buf.general_cgi_path.empty())
+		_server_buf.general_cgi_path.clear();
+	if (!_server_buf.general_cgi_extension.empty())
+		_server_buf.general_cgi_extension.clear();
 }
 
 void						conf_file::update_location_buffer()
@@ -220,6 +238,8 @@ void						conf_file::update_location_buffer()
 		_location_buf.index.clear();
 	if (!_location_buf.route.empty())
 		_location_buf.route.clear();
+	if (!_location_buf.redirect.empty())
+		_location_buf.redirect.clear();
 	if (!_location_buf.methods.empty())
 		_location_buf.methods.clear();
 	if (!_location_buf.media_type.empty())

@@ -1,15 +1,14 @@
 #include "utils.hpp"
 #include "header.hpp"
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <cstring>
 #include <cstdlib>
 #include <unordered_set>
 #include <sys/time.h>
 #ifndef OPEN_MAX
 # define OPEN_MAX 1000
-#endif
-#ifndef BUFFER_SIZE
-# define BUFFER_SIZE 42
 #endif
 
 /*
@@ -175,46 +174,7 @@ bool match(const std::string &what, const std::string &pattern)
     return (ret == 0);
 }
 
-static void	*ft_calloc(size_t count, size_t size)
-{
-	unsigned char	*ptr;
-	size_t			n_bzero;
-	int				i;
-
-	ptr = (unsigned char *)malloc(count * size);
-	n_bzero = count * size;
-	if (ptr != 0)
-	{
-		i = 0;
-		while (n_bzero-- > 0)
-			ptr[i++] = '\0';
-		return (ptr);
-	}
-	return (0);
-}
-
-static char	*ft_strchr(const char *s, int c)
-{
-	while (*s != '\0')
-	{
-		if (*s == c)
-			return ((char *)s);
-		s++;
-	}
-	if (*s == c)
-		return ((char *)s);
-	return (NULL);
-}
-
-static size_t	ft_strlen(const char *s)
-{
-	size_t	i;
-
-	i = 0;
-	while (s[i] != '\0')
-		i++;
-	return (i);
-}
+/* -------------------- get_next_line() ------------------------ */
 
 static char	*ft_strjoin(char *s1, char *s2)
 {
@@ -226,8 +186,8 @@ static char	*ft_strjoin(char *s1, char *s2)
 
 	if (s1 == 0 || s2 == 0)
 		return (0);
-	len_s1 = ft_strlen(s1);
-	len_s2 = ft_strlen(s2);
+	len_s1 = strlen(s1);
+	len_s2 = strlen(s2);
 	s_join = (char *)malloc(sizeof(*s1) * (len_s1 + len_s2) + 1);
 	if (s_join == NULL)
 		return (NULL);
@@ -292,31 +252,28 @@ static char	*get_line(char *text)
 	return (line);
 }
 
-static char	*free_temp(char **temp)
-{
-	free(*temp);
-	*temp = NULL;
-	return (NULL);
-}
-
 static char	*output(char *text)
 {
 	char		*line;
 	static char	*temp;
 
 	if (temp == NULL)
-		temp = (char *)ft_calloc(1, 1);
+		temp = (char *)calloc(1, 1);
 	if (temp == NULL)
 		return (NULL);
-	if (ft_strlen(text) > 0)
+	if (strlen(text) > 0)
 		temp = ft_strjoin(temp, text);
 	free(text);
-	if (ft_strlen(temp) == 0)
-		return (free_temp(&temp));
-	line = get_line(temp);
-	if (temp[ft_strlen(line)] == '\n')
+	if (strlen(temp) == 0)
 	{
-		temp = get_temp(temp, ft_strlen(line));
+		free(temp);
+		temp = NULL;
+		return (NULL);
+	}
+	line = get_line(temp);
+	if (temp[strlen(line)] == '\n')
+	{
+		temp = get_temp(temp, strlen(line));
 		return (ft_strjoin(line, (char *)"\n"));
 	}
 	else
@@ -333,15 +290,15 @@ char	*get_next_line(int fd)
 	char		*text;
 	int			buff_size;
 
-	buffer = (char *)malloc(sizeof(char) * BUFFER_SIZE + 1);
-	text = (char *)ft_calloc(1, 1);
-	if (text == NULL || buffer == NULL || BUFFER_SIZE <= 0)
+	buffer = (char *)malloc(sizeof(char) * 1 + 1);
+	text = (char *)calloc(1, 1);
+	if (text == NULL || buffer == NULL)
 		return (NULL);
-	buff_size = read(fd, buffer, BUFFER_SIZE);
+	buff_size = read(fd, buffer, 1);
 	while (buff_size > 0)
 	{
 		buffer[buff_size] = '\0';
-		if (ft_strchr(buffer, '\n'))
+		if (strchr(buffer, '\n'))
 		{
 			text = ft_strjoin(text, buffer);
 			break ;
@@ -349,7 +306,7 @@ char	*get_next_line(int fd)
 		else
 		{
 			text = ft_strjoin(text, buffer);
-			buff_size = read(fd, buffer, BUFFER_SIZE);
+			buff_size = read(fd, buffer, 1);
 		}
 	}
 	free(buffer);

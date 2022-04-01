@@ -1,4 +1,5 @@
 #include "Network.hpp"
+#include "http_response.hpp"
 
 void Network::initNetwork(char *file_name)
 {
@@ -45,14 +46,18 @@ void Network::runNetwork()
                         response += std::string(curLine);
                     LOG("CGI Response: " << response);
                     send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+                    /* cut connection with the client */
+                    usleep(10000);
+                    servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
                 }
-                /* cut connection with the client */
-                servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
+                PRINT_HERE();
                 /* remove client socket from 'sockets' */
                 sockets.erase(cgi_responses[*(int *)events[i].udata]);
                 /*  */
                 cgi_responses.erase(*(int *)events[i].udata);
                 close(*(int *)events[i].udata);
+                free(events[i].udata);
+                events[i].udata = NULL;
                 continue ;
             }
             if (servers.count(fd)) /* if 'fd' is a server socket -> accept connection */
@@ -68,6 +73,7 @@ void Network::runNetwork()
             {
                 if (events[i].flags & EV_EOF) /* client side shutdown */
                 {
+                    PRINT_HERE();
                     servers[sockets[fd]].cut_connection(fd);
                     sockets.erase(fd);
                     continue ;
@@ -79,6 +85,7 @@ void Network::runNetwork()
             }
             else if (events[i].filter == EVFILT_TIMER)  /* socket is expired */
             {
+                PRINT_HERE();
 				servers[sockets[fd]].send_timeout(fd); /* 408 Request Timeout */
                 servers[sockets[fd]].cut_connection(fd);
                 sockets.erase(fd);

@@ -15,7 +15,6 @@ typedef struct s_location
 	std::string					index;
 	std::string					route;
 	std::string					redirect;
-	std::string					language; // would be cool to implement
 	std::string					media_type;
 	std::string					cgi_path;
 	std::string					cgi_extension;
@@ -29,6 +28,8 @@ typedef struct s_server
 	std::string					host;
 	std::string					error_page;
 	std::string					server_name;
+	std::string					general_cgi_path;
+	std::string					general_cgi_extension;
 	std::vector<t_location>		locations;
 }			t_server;
 

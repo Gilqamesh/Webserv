@@ -11,6 +11,7 @@ struct http_request
     ~http_request();
 
     static http_request reject_http_request(void);
+    static http_request chunked_http_request(void);
 
     /* Request Line RFC7230/3.1.1. */
     std::string                                     method_token;
@@ -34,6 +35,7 @@ struct http_request
     std::string                                     abs_path;
     std::string                                     query;
 
+    bool                                            redirected;
     int                                             socket; /* request is read from this socket */
 };
 

@@ -12,6 +12,7 @@
 # include "http_response.hpp"
 # include "resource.hpp"
 # include "CGI.hpp"
+# include "conf_file.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -28,27 +29,40 @@
 # define HEADER_REQUEST_LINE_PATTERN "[!-~]+ [!-~]+ HTTP/[1-3][.]*[0-9]*" /* match_pattern needs support on '?' and '()' (capture group) for proper parsing */
 # define HEADER_RESPONSE_LINE_PATTERN "[!-~]+ [!-~]+ [!-~]*"
 
-typedef struct s_server t_server;
-typedef struct s_location t_location;
-
 class server
 {
 private:
-    int                                             server_socket_fd;
-    int                                             server_port;
-    int                                             server_backlog; /* server_socket_fd - backlog */
-    std::map<std::string, resource>                 cached_resources; /* route - resource */
-    std::map<int, int>                              *cgi_responses; /* cgi socket - client socket */
-    // std::map<int, unsigned long>                    connected_sockets_map; /* socket - timestamp */
-    /* constants */
-    std::set<std::string>                           accepted_request_methods;
-    std::set<char>                                  header_whitespace_characters;
-    std::string                                     http_version;
-    unsigned long                                   start_timestamp;
-    std::string                                     hostname; /* ipv4 */
-    int                                             current_number_of_connections;
-    EventHandler                                    *events;
+    int                                 server_socket_fd;
+    int                                 server_port;
+    int                                 server_backlog; /* server_socket_fd - backlog */
+    std::map<std::string, resource>     cached_resources; /* route - resource */
+    std::map<int, int>                  *cgi_responses; /* cgi socket - client socket */
+    // std::map<int, unsigned long>        connected_sockets_map; /* socket - timestamp */
+    /* constants */ 
+    std::set<std::string>               accepted_request_methods;
+    std::set<char>                      header_whitespace_characters;
+    std::string                         http_version;
+    unsigned long                       start_timestamp;
+    std::string                         hostname; /* ipv4 */
+    int                                 current_number_of_connections;
+    EventHandler                        *events;
+
+    std::vector<std::string>            headerFields;
+    std::string                         method;
+    bool                                found_content_length;
+    bool                                finished_reading;
+    bool                                header_is_parsed;
+    bool                                chunked;
+    bool                                is_post;
+    int                                 content_length;
+    std::string                         request_body;
+    std::vector<char>                   main_vec;
+    t_server                            server_configuration;
 public:
+
+    void            read_request(int fd);
+    bool            check_first_line(std::string, http_request&);
+    bool            check_prebody(std::string, http_request&);
 
     void            construct(int port, int backlog, unsigned long timestamp, std::map<int, int> *cgiResponses, EventHandler *events,
                                 const t_server &configuration);
@@ -75,7 +89,7 @@ private:
     void            request_control_TE(http_request &request);
 
     /* format http response and its control functions */
-    http_response   format_http_response(const http_request& request);
+    http_response   format_http_response(http_request& request);
     void            response_control_handle_age(http_response &response);
     void            response_control_cache_control(http_response &response);
     void            response_control_expires(http_response &response);
@@ -95,6 +109,11 @@ private:
     std::string     displayTimestamp(void);
     int             fileExists(const std::string& file);
     std::string     isAllowedDirectory(const std::string &target);
+    std::string     isAllowedDirectory2(const std::string &target);
+    std::string     isAllowedDirectory3(const std::string &target);
+
+    http_response   handle_post_request(http_request &request);
+    std::string     decoding_chunked(const std::string &chunked);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
     std::map<std::string, t_location>   sortedRoutes; /* for isAllowedDirectory to handle more specific routes first instead of the generic ones */
