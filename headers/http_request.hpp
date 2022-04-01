@@ -37,6 +37,7 @@ struct http_request
 
     bool                                            redirected;
     int                                             socket; /* request is read from this socket */
+    std::string                                     extension;
 };
 
 #endif

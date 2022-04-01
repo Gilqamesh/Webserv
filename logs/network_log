@@ -1,0 +1,6 @@
+[20:08:53]  Client joined from socket: 8
+nOfBytesRead: 217
+Log ID: 0
+[20:08:53]  REQUEST  -> [method: PUT] [target: /whateva.bla] [version: HTTP/1.1]
+[20:08:53]  Client disconnected on socket: 8
+
