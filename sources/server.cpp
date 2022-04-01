@@ -1174,26 +1174,35 @@ http_response server::handle_post_request(http_request &request)
     return (response);
 }
 
-std::string    server::decoding_chunked(const std::string &chunked)
+std::string    decoding_chunked(std::string chunked)
 {
-    std::string unchunked;
-    // get chunked-hexdecimal size
-    std::string hexdec_size;
-    for (size_t i = 0; chunked[i] != '\r' && chunked[i] != ' '; i++)
-        hexdec_size += chunked[i];
-    // transform chunk-size from hexdezimal to decimal
-    int chunked_size;
-    std::stringstream ss;
-    ss << std::hex << hexdec_size;
-    ss >> chunked_size;
-    if (chunked_size < 1)
-        return ("");
-    // getting to body;
-    int i = 0;
-    while (chunked[i] != '\n')
+    std::string         unchunked = "";
+    std::string         hexdec_size;
+    int                 chunked_size;
+    std::stringstream   ss;
+    size_t              i = 0;
+    while (true)
+    {
+        // get chunked-hexdecimal size
+        for (; chunked[i] != '\r' && chunked[i] != ' '; ++i)
+            hexdec_size += chunked[i];
+        // transform chunk-size from hexdezimal to decimal
+        ss << std::hex << hexdec_size;
+        ss >> chunked_size;
+        ss.clear();
+        if (chunked_size < 1)
+            break;
+        // getting to body;
+        while (chunked[i] != '\n')
+            i++;
+        // read chunked body
+        for (int j = 0; j < chunked_size; ++j)
+            unchunked += chunked[++i];
+        // getting to chunked_size()
+        while (chunked[i] != '\n')
+            i++;
         i++;
-    // read chunked body
-    for (int j = 0; j < chunked_size; ++j)
-        unchunked += chunked[++i];
+        hexdec_size.clear();
+    }
     return unchunked;
 }
