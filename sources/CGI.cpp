@@ -40,14 +40,13 @@ void CGI::execute(void)
         {
             close(m_pipe[WRITE_END]);
             close(tmp_pipe2[READ_END]);
-            int tmp_pipe[2];
-            if (pipe(tmp_pipe) == -1)
-                TERMINATE("pipe failed");
-            write(tmp_pipe[WRITE_END], request->payload.data(), request->payload.length());
-            close(tmp_pipe[WRITE_END]);
-            if (dup2(tmp_pipe[READ_END], STDIN_FILENO) == -1)
+            int tmp_cgi_file = open("temp/temp_cgi_file", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            if (tmp_cgi_file == -1)
+                TERMINATE("failed to open temp/temp_cgi_file");
+            write(tmp_cgi_file, request->payload.data(), request->payload.length());
+            if (dup2(tmp_cgi_file, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
-            close(tmp_pipe[READ_END]);
+            close(tmp_cgi_file);
             char *arg1 = strdup(meta_variables["PATH_TRANSLATED"].c_str());
             char **args = (char **)malloc(3 * sizeof(char *));
             args[0] = strdup("/usr/bin/php");
@@ -75,16 +74,27 @@ void CGI::execute(void)
                 TERMINATE("execve failed");
         }
         close(tmp_pipe2[WRITE_END]);
+        close(tmp_pipe2[READ_END]);
+        std::string cgiReturnStr;
+        while (1)
+        {
+            char buffer[10001];
+            int readAmount = read(tmp_pipe2[READ_END], buffer, 10000);
+            if (readAmount == -1)
+                TERMINATE("read failed");
+            buffer[readAmount] = '\0';
+            cgiReturnStr += buffer;
+            if (readAmount == 0)
+                break ;
+        }
         wait(NULL);
-        char buffer[10000];
-        buffer[10000 - 1] = '\0';
-        read(tmp_pipe2[READ_END], buffer, 10000);
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
-        cgiResponse += "Content-Length: " + std::to_string(strlen(buffer)) + "\n";
+        cgiResponse += "Content-Length: " + std::to_string(cgiReturnStr.size()) + "\n";
+        // cgiResponse += "Content-Length: 0\n";
         cgiResponse += "Connection: close\n";
         cgiResponse += "\n";
-        cgiResponse += buffer;
+        cgiResponse += cgiReturnStr;
         write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
         close(m_pipe[WRITE_END]);
         exit(0);

@@ -24,6 +24,8 @@ all:
 	make $(NAME)
 clean:
 	rm -f $(object_directory)/*.o
+	rm -f logs/*
+	touch logs/.gitkeep
 fclean: clean
 	rm -f $(name) $(test_name)
 re: fclean
