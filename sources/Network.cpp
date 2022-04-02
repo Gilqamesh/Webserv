@@ -13,7 +13,7 @@ void Network::initNetwork(char *file_name)
 
     for (size_t i = 0; i < configs.size(); i++)
     {
-	    serverNetwork[i].construct(configs[i].port, 10, start_timestamp_network, &cgi_responses, &events, configs[i]);
+	    serverNetwork[i].construct(configs[i].port, BACKLOG, start_timestamp_network, &cgi_responses, &events, configs[i]);
 	    servers.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
     }
 }
@@ -44,12 +44,29 @@ void Network::runNetwork()
                     char *curLine;
                     while ((curLine = get_next_line(*(int *)events[i].udata)))
                     {
-                        response = std::string(curLine);
-                        send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+                        response += std::string(curLine);
                         free(curLine);
                     }
-                    // LOG("CGI Response: " << response);
-                    // LOG("sendRet: " << sendRet);
+                    send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+                    LOG("CGI Response: " << response);
+                    response.clear();
+                    int cgi_out = open("temp/temp_cgi_file_out", O_RDONLY);
+                    if (cgi_out == -1)
+                        WARN("open failed for reading: temp/temp_cgi_file_out");
+                    char buffer[4096];
+                    while (1)
+                    {
+                        int readRet = read(cgi_out, buffer, 4095);
+                        if (readRet == -1)
+                        {
+                            PRINT_HERE();
+                            WARN("read failed");
+                        }
+                        if (readRet == 0)
+                            break ;
+                        send(cgi_responses[*(int *)events[i].udata], buffer, readRet, 0);
+                    }
+                    close(cgi_out);
                     /* cut connection with the client */
                     usleep(10000);
                     servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);

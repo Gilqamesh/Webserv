@@ -957,17 +957,21 @@ void server::send_timeout(int socket)
 void server::add_script_meta_variables(CGI &script, const http_request &request)
 {
     // script.add_meta_variable("AUTH_TYPE", "");
-    script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
+    if (request.payload.empty() == false)
+        script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
     if (request.header_fields.count("Content-Type"))
         script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
-    script.add_meta_variable("PATH_INFO", cached_resources[request.target].path);
+    // script.add_meta_variable("CONTENT_TYPE", "test/file");
+    // script.add_meta_variable("PATH_INFO", cached_resources[request.target].path);
     // script.add_meta_variable("PATH_INFO", request.abs_path);
     char *cwd;
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    // script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
-    script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file");
+    script.add_meta_variable("PATH_INFO", cwd + request.target);
+    script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
+    // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
+    // script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file_in");
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);
@@ -976,13 +980,21 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     */
     script.add_meta_variable("REQUEST_METHOD", request.method_token);
     if (request.extension.empty() == false)
-        script.add_meta_variable("SCRIPT_NAME", request.extension);
+        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + "/" + request.extension);
     else
         script.add_meta_variable("SCRIPT_NAME", "." + request.abs_path);
     script.add_meta_variable("SERVER_NAME", this->hostname);
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
+    std::string tempHost = request.URI;
     script.add_meta_variable("REQUEST_URI", cached_resources[request.target].path);
+    LOG("ASCII");
+    for (unsigned int i = 0; i < tempHost.size(); ++i)
+        printf("[%d] ", tempHost[i]);
+    LOG("");
+    LOG("URI: " << request.URI);
+    // script.add_meta_variable("REQUEST_URI", tempHost + request.target);
+    script.add_meta_variable("REQUEST_URI", "http://localhost/yo.bla");
     /* name/version of the server, no clue what this means currently.. */
     // script.add_meta_variable("SERVER_SOFTWARE", "");
     for (std::map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)
@@ -1050,9 +1062,6 @@ http_response server::handle_post_request(http_request &request)
          * if general_cgi_extension exists in config file and the request resource matches this extension
          * -> general_cgi_path should exist, run it
          */
-        request.target = server_configuration.general_cgi_path;
-        if (request.target.front() != '/')
-            request.target = "/" + request.target;
         int cgi_pipe[2];
         if (pipe(cgi_pipe) == -1)
             TERMINATE("pipe failed");
@@ -1094,9 +1103,6 @@ http_response server::handle_post_request(http_request &request)
             * if cgi_extension exists in location and the request resource matches this extension
             * -> cgi_path should exist, run it
             */
-            request.target = sortedRoutes[location].cgi_path;
-            if (request.target.front() != '/')
-                request.target = "/" + request.target;
             int cgi_pipe[2];
             if (pipe(cgi_pipe) == -1)
                 TERMINATE("pipe failed");
