@@ -38,7 +38,7 @@ void    server::get_header_fields(void)
     }
 }
 
-void    server::get_header_infos(void)
+bool    server::get_header_infos(void)
 {
     for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
     {
@@ -47,8 +47,14 @@ void    server::get_header_infos(void)
         else if ((*it).find("Transfer-Encoding: chunked") != std::string::npos)
             chunked = true;
         else if ((*it).find("Content-Length") != std::string::npos)
-            found_content_length = true; 
-    } 
+        {
+            found_content_length = true;
+            if (server_configuration.client_max_body_size != -1
+                && stoi(conf_file::get_words(*it)[1]) > server_configuration.client_max_body_size)
+                return (false);
+        }
+    }
+    return (true);
 }
 
 void    server::get_body(void)
@@ -74,7 +80,8 @@ http_request server::parse_request_header(int socket)
         get_header_fields();
         if (header_is_parsed == false)
             return (http_request::chunked_http_request());
-        get_header_infos();
+        if (!get_header_infos())
+            return (http_request::reject_http_request());
         if (is_post == true && chunked == false && found_content_length == false)
         {
             PRINT_HERE();
@@ -110,7 +117,12 @@ http_request server::parse_request_header(int socket)
     http_request request(false);
     request.socket = socket;
     if (chunked == true)
+    {
         request.payload = decoding_chunked(request_body);
+        if (server_configuration.client_max_body_size != -1
+            && chunks_size > server_configuration.client_max_body_size)
+            return (http_request::reject_http_request());
+    }
     else
         request.payload = request_body;
 
@@ -186,6 +198,7 @@ const t_server &configuration)
     content_length = 0;
     chunked = false;
     start_body_pos = 0;
+    chunks_size = 0;
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         // LOG("Redirect for route " + locations[i].route + ": " + locations[i].redirect);
@@ -494,6 +507,20 @@ std::string server::isAllowedDirectory(const std::string &target)
             int ret = fileExists(path);
             if (ret == 2) /* if its a directory */
             {
+                for (unsigned int i = 0; i < locations.size(); i++)
+                {
+                    if (locations[i].route.back() == '/')
+                        locations[i].route.pop_back();
+                    if (locations[i].route == cit->first)
+                    {
+                        LOG("HHHHHHHHHHHHHHH");
+                        if (locations[i].autoindex == 0)
+                        {
+                            LOG("HMMMMMMMMMMMM");
+                            return ("");
+                        }
+                    }
+                }
                 std::string subDirIndex = path + (path.back() == '/' ? "" : "/") + cit->second.index;
                 // LOG("Index - " << subDirIndex);
                 int ret2 = fileExists(subDirIndex);
@@ -1212,6 +1239,7 @@ std::string     server::decoding_chunked(const std::string &chunked)
         ss << std::hex << hexdec_size;
         ss >> chunked_size;
         ss.clear();
+        chunks_size += chunked_size;
         if (chunked_size < 1)
             break;
         // getting to body;

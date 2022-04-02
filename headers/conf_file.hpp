@@ -10,7 +10,6 @@
 typedef struct s_location
 {
 	int							autoindex;
-	off_t						client_max_body_size;
 	std::string					root;
 	std::string					index;
 	std::string					route;

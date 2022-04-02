@@ -167,12 +167,6 @@ void					conf_file::parse_location(int idx, int start)
 				_location_buf.methods.push_back(words[i]);
 			}
 		}
-		else if (words.size() == 2 && words.front() == "client_max_body_size")
-		{
-			if (_location_buf.client_max_body_size != -1)
-				error("client_max_body_size for location already exist");
-			_location_buf.client_max_body_size = convert_to_bytes(words[1]);
-		}
 		else if (words.size() == 2 && words.front() == "cgi_extension")
 		{
 			if (!_location_buf.cgi_extension.empty())
@@ -230,7 +224,6 @@ void						conf_file::update_server_buffer()
 
 void						conf_file::update_location_buffer()
 {
-	_location_buf.client_max_body_size = -1;
 	_location_buf.autoindex = -1;
 	if (!_location_buf.root.empty())
 		_location_buf.root.clear();
