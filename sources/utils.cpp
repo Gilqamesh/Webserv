@@ -290,11 +290,11 @@ char	*get_next_line(int fd)
 	char		*text;
 	int			buff_size;
 
-	buffer = (char *)malloc(sizeof(char) * 1 + 1);
+	buffer = (char *)malloc(sizeof(char) * GNL_BUFFER_SIZE + 1);
 	text = (char *)calloc(1, 1);
-	if (text == NULL || buffer == NULL)
+	if (text == NULL || buffer == NULL || GNL_BUFFER_SIZE <= 0)
 		return (NULL);
-	buff_size = read(fd, buffer, 1);
+	buff_size = read(fd, buffer, GNL_BUFFER_SIZE);
 	while (buff_size > 0)
 	{
 		buffer[buff_size] = '\0';
@@ -306,7 +306,7 @@ char	*get_next_line(int fd)
 		else
 		{
 			text = ft_strjoin(text, buffer);
-			buff_size = read(fd, buffer, 1);
+			buff_size = read(fd, buffer, GNL_BUFFER_SIZE);
 		}
 	}
 	free(buffer);

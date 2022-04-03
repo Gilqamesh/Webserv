@@ -119,7 +119,7 @@ private:
     std::string     isAllowedDirectory3(const std::string &target);
 
     http_response   handle_post_request(http_request &request);
-    std::string     decoding_chunked(const std::string &chunked);
+    std::pair<std::string, bool>     decoding_chunked(const std::string &chunked);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
     std::map<std::string, t_location>   sortedRoutes; /* for isAllowedDirectory to handle more specific routes first instead of the generic ones */

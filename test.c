@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include "fcntl.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -6,21 +7,35 @@ int main(int argc, char **argv, char **envp)
 {
     (void)argc;
     (void)argv;
-    int p[2];
-    pipe(p);
     int pid = fork();
+    if (pid == -1)
+        exit(3);
     if (pid == 0)
     {
-        close(p[0]);
-        dup2(p[1], STDOUT_FILENO);
-        close(p[1]);
-        write(STDOUT_FILENO, "yo", 2);
-        execve("/usr/bin/php", (char *[]){"/usr/bin/php", "./hello.php", NULL}, envp);
+        int fd = open("test2.txt", O_RDWR);
+        if (fd == -1)
+            printf("cant open for writing: test2.txt\n");
+        write(fd, "yo\n", 3);
+        close(fd);
+        fd = open("test2.txt", O_RDWR);
+        if (dup2(fd, STDIN_FILENO) == -1)
+        {
+            perror("dup2 failed");
+            exit(4);
+        }
+        close(fd);
+        if (execve("/bin/cat", (char *[]){"/bin/cat", NULL}, envp) == -1)
+        {
+            perror("execve failed");
+            exit(2);
+        }
     }
-    close(p[1]);
-    wait(NULL);
-    char buffer[100000];
-    buffer[100000 - 1] = '\0';
-    read(p[0], buffer, 100000);
-    printf("Response: %s\n", buffer);
+    int ret;
+    wait(&ret);
+    if (WIFEXITED(ret))
+    {
+        printf("Exit status: %d\n", WEXITSTATUS(ret));
+    }
+    // close(fd);
+    // printf("Response: %s\n", buffer);
 }

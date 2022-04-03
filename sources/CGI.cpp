@@ -10,7 +10,7 @@ CGI::CGI(int pipe[2], http_request *httpRequest)
     m_pipe[0] = pipe[0];
     m_pipe[1] = pipe[1];
     /* Set up meta_variables RFC3875/4.1., some of this comes from the calling server */
-    meta_variables["GATEWAY_INTERFACE"] = "CGI/1.1";
+    // meta_variables["GATEWAY_INTERFACE"] = "CGI/1.1";
     // LOG_E("Meta variables");
     // for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
     // {
@@ -42,6 +42,7 @@ void CGI::execute(void)
         if (pid2 == 0)
         {
             close(m_pipe[WRITE_END]);
+            close(m_pipe[READ_END]);
             int tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_WRONLY | O_CREAT | O_TRUNC, 0777);
             if (tmp_cgi_file_in == -1)
                 TERMINATE("failed to open temp/temp_cgi_file_in");
@@ -57,18 +58,19 @@ void CGI::execute(void)
             //     write(tmp_cgi_file_in, curHeaderField.c_str(), curHeaderField.size());
             // }
             // write(tmp_cgi_file_in, "\r\n", 2);
+            LOG_E("Request->payload.size(): " << request->payload.size());
             write(tmp_cgi_file_in, request->payload.data(), request->payload.length());
+            close(tmp_cgi_file_in);
+            /*
+             * Turns out this doesn't work to buffer input data?
+             */
+            tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_RDONLY);
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
             close(tmp_cgi_file_in);
-            // char *arg1 = strdup("cgi_tester");
-            // char **args = (char **)malloc(3 * sizeof(char *));
-            // args[0] = strdup("/usr/bin/php");
-            // args[1] = arg1;
-            // args[2] = NULL;
             char **args = (char **)malloc(3 * sizeof(char *));
-            char *arg1 = strdup(meta_variables["SCRIPT_NAME"].c_str());
-            char *arg2 = strdup(meta_variables["PATH_TRANSLATED"].c_str());
+            char *arg1 = strdup(request->extension.c_str());
+            char *arg2 = strdup(meta_variables["PATH_INFO"].c_str());
             args[0] = arg1;
             args[1] = arg2; // cwd + request.target
             args[2] = NULL;
@@ -97,7 +99,9 @@ void CGI::execute(void)
             if (execve(args[0], args, env) == -1)
                 TERMINATE("execve failed");
         }
+        PRINT_HERE();
         wait(NULL);
+        PRINT_HERE();
         struct stat fileInfo;
         if (stat(request->underLocation.c_str(), &fileInfo) == -1)
             TERMINATE(("stat failed on file " + request->underLocation).c_str());

@@ -24,10 +24,11 @@
 # include <sys/event.h>
 # include <sys/time.h>
 
+# define GNL_BUFFER_SIZE 10000000
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
 # define LOG_TIME(x) (std::cout << x << " time: " << (get_current_timestamp() - start_timestamp) / 1000000.0 << " seconds" << std::endl)
-# define WARN(x) (LOG_E("Warning: " << x))
+# define WARN(x) (LOG_E("\033[1;31mWarning: " << x << "\033[0m"))
 # define PRINT_HERE() (LOG(__FILE__ << " " << __LINE__))
 # define TERMINATE(x) do {  \
     PRINT_HERE();           \
@@ -48,5 +49,6 @@ extern int http_message_log_id;
 /* for pipes */
 # define READ_END   0
 # define WRITE_END  1
+
 
 #endif
