@@ -48,7 +48,7 @@ void Network::runNetwork()
                         free(curLine);
                     }
                     send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
-                    LOG("CGI Response: " << response);
+                    LOG("CGI Response:\n" << response);
                     response.clear();
                     int cgi_out = open("temp/temp_cgi_file_out", O_RDONLY);
                     if (cgi_out == -1)
@@ -56,7 +56,7 @@ void Network::runNetwork()
                     char buffer[4096];
                     while (1)
                     {
-                        int readRet = read(cgi_out, buffer, 4095);
+                        int readRet = read(cgi_out, buffer, 4096);
                         if (readRet == -1)
                         {
                             PRINT_HERE();

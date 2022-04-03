@@ -11,12 +11,11 @@ CGI::CGI(int pipe[2], http_request *httpRequest)
     m_pipe[1] = pipe[1];
     /* Set up meta_variables RFC3875/4.1., some of this comes from the calling server */
     meta_variables["GATEWAY_INTERFACE"] = "CGI/1.1";
-    meta_variables.insert(std::pair<std::string, std::string>("GATEWAY_INTERFACE", "CGI/1.1"));
-    LOG_E("Meta variables");
-    for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
-    {
-        LOG_E(it->first << ": " << it->second);
-    }
+    // LOG_E("Meta variables");
+    // for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
+    // {
+    //     LOG_E(it->first << ": " << it->second);
+    // }
 }
 
 CGI::~CGI()
@@ -46,6 +45,18 @@ void CGI::execute(void)
             int tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_WRONLY | O_CREAT | O_TRUNC, 0777);
             if (tmp_cgi_file_in == -1)
                 TERMINATE("failed to open temp/temp_cgi_file_in");
+            /*
+             * Experimentation on sending the request header field to the CGI as well
+             */
+            // std::string firstLine = request->method_token + " " + request->target + " " + request->protocol_version + "\r\n";
+            // write(tmp_cgi_file_in, firstLine.c_str(), firstLine.size());
+            // for (std::map<std::string, std::string>::iterator it = request->header_fields.begin();
+            //     it != request->header_fields.end(); ++it)
+            // {
+            //     std::string curHeaderField = it->first + ": " + it->second + "\r\n";
+            //     write(tmp_cgi_file_in, curHeaderField.c_str(), curHeaderField.size());
+            // }
+            // write(tmp_cgi_file_in, "\r\n", 2);
             write(tmp_cgi_file_in, request->payload.data(), request->payload.length());
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
@@ -90,7 +101,7 @@ void CGI::execute(void)
         struct stat fileInfo;
         if (stat(request->underLocation.c_str(), &fileInfo) == -1)
             TERMINATE(("stat failed on file " + request->underLocation).c_str());
-        std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
+        std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
         cgiResponse += "Content-Length: " + std::to_string(fileInfo.st_size) + "\n";
         cgiResponse += "Connection: close\n";
@@ -109,7 +120,7 @@ void CGI::execute(void)
         char buffer[4096];
         while (1)
         {
-            int readRet = read(fd2, buffer, 4095);
+            int readRet = read(fd2, buffer, 4096);
             if (readRet == -1)
             {
                 PRINT_HERE();

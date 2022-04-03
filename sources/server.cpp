@@ -23,16 +23,17 @@ void    server::get_header_fields(void)
     std::string tmp;
     for (size_t i = 0; i < main_vec.size(); ++i)
     {
-        tmp += main_vec[i];
+        tmp.push_back(main_vec[i]);
         if (main_vec[i] == '\n')
         {
-            headerFields.push_back(tmp);
-            tmp.clear();
-            if (headerFields.back() == "\r\n")
+            if (tmp == "\r\n")
             {
-                start_body_pos = i++;
+                start_body_pos = ++i;
 
-                for (int j = 0; headerFields[j] != "\r\n"; ++j)
+                /*
+                 * Remove ending '\r' and '\n' characters from each header field
+                 */
+                for (size_t j = 0; j < headerFields.size(); ++j)
                 {
                     while (headerFields[j].back() == '\r' || headerFields[j].back() == '\n')
                         headerFields[j].pop_back();
@@ -41,6 +42,8 @@ void    server::get_header_fields(void)
                 PRINT_HERE();
                 return ;
             }
+            headerFields.push_back(tmp);
+            tmp.clear();
         }
     }
 }
@@ -87,8 +90,11 @@ http_request server::parse_request_header(int socket)
         get_header_fields();
         if (header_is_parsed == false)
             return (http_request::chunked_http_request());
-        if (!get_header_infos())
+        if (get_header_infos() == false)
+        {
+            PRINT_HERE();
             return (http_request::reject_http_request());
+        }
         if (is_post == true && chunked == false && found_content_length == false)
         {
             PRINT_HERE();
@@ -126,7 +132,10 @@ http_request server::parse_request_header(int socket)
         request.payload = decoding_chunked(request_body);
         if (server_configuration.client_max_body_size != -1
             && chunks_size > server_configuration.client_max_body_size)
+        {
+            PRINT_HERE();
             return (http_request::reject_http_request());
+        }
     }
     else
         request.payload = request_body;
@@ -140,18 +149,13 @@ http_request server::parse_request_header(int socket)
         return (http_request::reject_http_request());
     }
 
-    size_t i = 1;
-    std::string current_line;
-    while (true)
+    for (size_t i = 1; i < headerFields.size(); ++i)
     {
-        if (headerFields[i] == "\r\n" || headerFields[i] == "\n" || headerFields[i] == "\r")
-            break ; /* end of header */
         if (check_prebody(headerFields[i], request) == false)
         {
             PRINT_HERE();
             return (http_request::reject_http_request());
         }
-        ++i;
     }
 
     if (request.header_fields.count("Host") == 0)
@@ -432,14 +436,27 @@ bool            server::check_prebody(std::string current_line,  http_request &r
     // std::cout << "header field: " << current_line;
     if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
         if (header_whitespace_characters.count(current_line[0]))
-            return (0); /* 400 bad request (syntax error) */
+        {
+            PRINT_HERE();
+            return (false); /* 400 bad request (syntax error) */
+        }
         first_header_field = false;
     }
     if (match(current_line, HEADER_FIELD_PATTERN) == false)
-        return (0); /* 400 bad request (syntax error) */
+    {
+        LOG("ASCII");
+        for (size_t i = 0; i < current_line.size(); ++i)
+            printf("[%d] ", current_line[i]);
+        LOG("current_line: " << current_line);
+        PRINT_HERE();
+        return (false); /* 400 bad request (syntax error) */
+    }
     std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
     if (field_name == "Host" && request.header_fields.count(field_name))
-        return (0); /* RFC7230/5.4. */
+    {
+        PRINT_HERE();
+        return (false); /* RFC7230/5.4. */
+    }
     std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
     // LOG("field_value_untruncated: " << field_value_untruncated);
     std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
@@ -1002,10 +1019,10 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
     script.add_meta_variable("PATH_INFO", cwd + std::string("/") + request.target);
-    LOG("\nCWD");
-    LOG("cwd            = " << cwd);
-    LOG("request.target = " << request.target);
-    LOG("");
+    // LOG("\nCWD");
+    // LOG("cwd            = " << cwd);
+    // LOG("request.target = " << request.target);
+    // LOG("");
     // script.add_meta_variable("PATH_INFO", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed!!!!
     // script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
     // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
@@ -1028,11 +1045,11 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     std::string tempHost = request.URI;
     // script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
     script.add_meta_variable("REQUEST_URI", cwd + std::string("/") + request.target);
-    LOG("ASCII");
-    for (unsigned int i = 0; i < tempHost.size(); ++i)
-        printf("[%d] ", tempHost[i]);
-    LOG("");
-    LOG("URI: " << request.URI);
+    // LOG("ASCII");
+    // for (unsigned int i = 0; i < tempHost.size(); ++i)
+    //     printf("[%d] ", tempHost[i]);
+    // LOG("");
+    // LOG("URI: " << request.URI);
     // script.add_meta_variable("REQUEST_URI", tempHost + request.target);
     // script.add_meta_variable("REQUEST_URI", "http://localhost/yo.bla");
     /* name/version of the server, no clue what this means currently.. */
@@ -1136,7 +1153,7 @@ http_response server::handle_post_request(http_request &request)
             }
         }
         assert(location.size()); /* location should exist */
-        LOG("location: " << location);
+        // LOG("location: " << location);
         if (sortedRoutes[location].cgi_extension.size() && sortedRoutes[location].cgi_extension == extension)
         {
             /*
