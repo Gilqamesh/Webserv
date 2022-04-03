@@ -110,7 +110,7 @@ private:
     void            payload_header_fields(const http_request &request, http_response &response);
 
     void            initialize_constants(void); // helper
-    void            add_script_meta_variables(CGI &script, const http_request &request);
+    void            add_script_meta_variables(CGI &script, http_request &request);
 
     std::string     displayTimestamp(void);
     int             fileExists(const std::string& file);

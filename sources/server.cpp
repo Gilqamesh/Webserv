@@ -31,7 +31,14 @@ void    server::get_header_fields(void)
             if (headerFields.back() == "\r\n")
             {
                 start_body_pos = i++;
+
+                for (int j = 0; headerFields[j] != "\r\n"; ++j)
+                {
+                    while (headerFields[j].back() == '\r' || headerFields[j].back() == '\n')
+                        headerFields[j].pop_back();
+                }
                 header_is_parsed = true;
+                PRINT_HERE();
                 return ;
             }
         }
@@ -981,7 +988,7 @@ void server::send_timeout(int socket)
 }
 
 /* Add request meta-variables to the script RFC3875/4.1. */
-void server::add_script_meta_variables(CGI &script, const http_request &request)
+void server::add_script_meta_variables(CGI &script, http_request &request)
 {
     // script.add_meta_variable("AUTH_TYPE", "");
     if (request.payload.empty() == false)
@@ -995,8 +1002,13 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    script.add_meta_variable("PATH_INFO", cwd + request.target);
-    script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
+    // script.add_meta_variable("PATH_INFO", cwd + request.target);
+    LOG("\nCWD");
+    LOG("cwd            = " << cwd);
+    LOG("request.target = " << request.target);
+    LOG("");
+    script.add_meta_variable("PATH_INFO", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed!!!!
+    script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
     // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
     // script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file_in");
     script.add_meta_variable("QUERY_STRING", request.query);
@@ -1014,24 +1026,24 @@ void server::add_script_meta_variables(CGI &script, const http_request &request)
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
     std::string tempHost = request.URI;
-    script.add_meta_variable("REQUEST_URI", cached_resources[request.target].path);
+    script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
     LOG("ASCII");
     for (unsigned int i = 0; i < tempHost.size(); ++i)
         printf("[%d] ", tempHost[i]);
     LOG("");
     LOG("URI: " << request.URI);
     // script.add_meta_variable("REQUEST_URI", tempHost + request.target);
-    script.add_meta_variable("REQUEST_URI", "http://localhost/yo.bla");
+    // script.add_meta_variable("REQUEST_URI", "http://localhost/yo.bla");
     /* name/version of the server, no clue what this means currently.. */
     // script.add_meta_variable("SERVER_SOFTWARE", "");
-    for (std::map<std::string, std::string>::const_iterator cit = request.header_fields.begin(); cit != request.header_fields.end(); ++cit)
+    for (std::map<std::string, std::string>::iterator it = request.header_fields.begin(); it != request.header_fields.end(); ++it)
     {
-        if (cit->first == "Authorization" || cit->first == "Content-Length" || cit->first == "Content-Type"
-            || cit->first == "Connection")
+        if (it->first == "Authorization" || it->first == "Content-Length" || it->first == "Content-Type"
+            || it->first == "Connection")
             continue ;
-        std::string key = "HTTP_" + to_upper(cit->first);
+        std::string key = "HTTP_" + to_upper(it->first);
         std::replace(key.begin(), key.end(), '-', '_');
-        script.add_meta_variable(key, cit->second);
+        script.add_meta_variable(key, it->second);
     }
 }
 
