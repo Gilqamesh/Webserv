@@ -111,9 +111,7 @@ http_request server::parse_request_header(int socket)
     else
     {
         if (nOfBytesRead < READ_HTTP_BUFFER_SIZE)
-        {
             finished_reading = true;
-        }
         get_body();
     }
     if (finished_reading == false)
@@ -990,6 +988,7 @@ void server::send_timeout(int socket)
 /* Add request meta-variables to the script RFC3875/4.1. */
 void server::add_script_meta_variables(CGI &script, http_request &request)
 {
+    request.target = "/" + isAllowedDirectory2(request.target);
     // script.add_meta_variable("AUTH_TYPE", "");
     if (request.payload.empty() == false)
         script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
@@ -1002,15 +1001,16 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    // script.add_meta_variable("PATH_INFO", cwd + request.target);
+    script.add_meta_variable("PATH_INFO", cwd + request.target);
     LOG("\nCWD");
     LOG("cwd            = " << cwd);
     LOG("request.target = " << request.target);
     LOG("");
-    script.add_meta_variable("PATH_INFO", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed!!!!
-    script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
+    // script.add_meta_variable("PATH_INFO", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed!!!!
+    // script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
     // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
     // script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file_in");
+    script.add_meta_variable("PATH_TRANSLATED", cwd + request.target);
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);
@@ -1019,14 +1019,15 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     */
     script.add_meta_variable("REQUEST_METHOD", request.method_token);
     if (request.extension.empty() == false)
-        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + "/" + request.extension);
+        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + request.extension);
     else
         script.add_meta_variable("SCRIPT_NAME", "." + request.abs_path);
     script.add_meta_variable("SERVER_NAME", this->hostname);
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
     std::string tempHost = request.URI;
-    script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
+    // script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
+    script.add_meta_variable("REQUEST_URI", cwd + request.target);
     LOG("ASCII");
     for (unsigned int i = 0; i < tempHost.size(); ++i)
         printf("[%d] ", tempHost[i]);
