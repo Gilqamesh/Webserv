@@ -1019,7 +1019,7 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     */
     script.add_meta_variable("REQUEST_METHOD", request.method_token);
     if (request.extension.empty() == false)
-        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + request.extension);
+        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + "/" + request.extension);
     else
         script.add_meta_variable("SCRIPT_NAME", "." + request.abs_path);
     script.add_meta_variable("SERVER_NAME", this->hostname);
@@ -1097,6 +1097,8 @@ http_response server::handle_post_request(http_request &request)
     if (pos != std::string::npos)
         extension = request.target.substr(pos);
     request.extension = server_configuration.general_cgi_path;
+    request.underLocation = isAllowedDirectory2(request.target);
+    LOG("request.underLocation: " << request.underLocation);
     if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
     {   /*
          * if general_cgi_extension exists in config file and the request resource matches this extension
@@ -1122,9 +1124,7 @@ http_response server::handle_post_request(http_request &request)
         PRINT_HERE();
         return (http_response::cgi_response());
     }
-    std::string underLocation(isAllowedDirectory2(request.target));
-    LOG("underLocation: " << underLocation);
-    if (underLocation.size()) /* location exists */
+    if (request.underLocation.size()) /* location exists */
     {
         std::string location;
         for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
@@ -1168,11 +1168,11 @@ http_response server::handle_post_request(http_request &request)
             LOG("*it: " << *it);
             if (*it == "PUT" && request.method_token == "PUT")
             { /* check if files exists -> if so update it */
-                std::ofstream uploaded_file(underLocation);
+                std::ofstream uploaded_file(request.underLocation);
                 PRINT_HERE();
-                LOG("underLocation: " << underLocation);
+                LOG("request.underLocation: " << request.underLocation);
                 if (!uploaded_file)
-                    WARN("Failed to create file: " + underLocation);
+                    WARN("Failed to create file: " + request.underLocation);
                 // LOG(request.payload);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
@@ -1195,11 +1195,11 @@ http_response server::handle_post_request(http_request &request)
             }
             else if (*it == "POST" && request.method_token == "POST")
             { /* creates and overwrites resource */
-                std::ofstream uploaded_file(underLocation);
+                std::ofstream uploaded_file(request.underLocation);
                 PRINT_HERE();
                 LOG("uploaded_file: " << uploaded_file);
                 if (!uploaded_file)
-                    WARN("Failed to create file: " + underLocation);
+                    WARN("Failed to create file: " + request.underLocation);
                 uploaded_file << request.payload;
                 // LOG("request.payload: " << request.payload);
                 http_response response;

@@ -61,6 +61,7 @@ void Network::runNetwork()
                         {
                             PRINT_HERE();
                             WARN("read failed");
+                            break ;
                         }
                         if (readRet == 0)
                             break ;

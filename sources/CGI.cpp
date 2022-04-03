@@ -73,9 +73,9 @@ void CGI::execute(void)
                 env[index++] = strdup(std::string(it->first + "=" + it->second).c_str());
             }
             env[index] = NULL;
-            int tmp_cgi_file_out = open("temp/temp_cgi_file_out", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            int tmp_cgi_file_out = open(request->underLocation.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0777);
             if (tmp_cgi_file_out == -1)
-                TERMINATE("failed to opne temp/temp_cgi_file_out");
+                TERMINATE(("failed to open " + request->underLocation).c_str());
             if (dup2(tmp_cgi_file_out, STDOUT_FILENO) == -1)
                 TERMINATE("dup2 failed");
             close(tmp_cgi_file_out);
@@ -88,8 +88,8 @@ void CGI::execute(void)
         }
         wait(NULL);
         struct stat fileInfo;
-        if (stat("temp/temp_cgi_file_out", &fileInfo) == -1)
-            TERMINATE("stat failed on file temp/temp_cgi_file_out");
+        if (stat(request->underLocation.c_str(), &fileInfo) == -1)
+            TERMINATE(("stat failed on file " + request->underLocation).c_str());
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + std::string("localhost") + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
         cgiResponse += "Content-Length: " + std::to_string(fileInfo.st_size) + "\n";
@@ -97,6 +97,31 @@ void CGI::execute(void)
         cgiResponse += "\n";
         write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
         close(m_pipe[WRITE_END]);
+        /*
+         * store the output of the cgi to temp/temp_cgi_file_out as well
+         */
+        int fd = open("temp/temp_cgi_file_out", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        if (fd == -1)
+            TERMINATE("failed to open for writing: temp/temp_cgi_file_out");
+        int fd2 = open(request->underLocation.c_str(), O_RDONLY);
+        if (fd2 == -1)
+            TERMINATE(("failed to open for reading: " + request->underLocation).c_str());
+        char buffer[4096];
+        while (1)
+        {
+            int readRet = read(fd2, buffer, 4095);
+            if (readRet == -1)
+            {
+                PRINT_HERE();
+                WARN("read failed");
+                break ;
+            }
+            if (readRet == 0)
+                break ;
+            write(fd, buffer, readRet);
+        }
+        close(fd);
+        close(fd2);
         exit(0);
     }
 }

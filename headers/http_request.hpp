@@ -37,7 +37,8 @@ struct http_request
 
     bool                                            redirected;
     int                                             socket; /* request is read from this socket */
-    std::string                                     extension;
+    std::string                                     extension; /* general_cgi_path */
+    std::string                                     underLocation; /* request target with index substituted */
 };
 
 #endif
