@@ -28,6 +28,8 @@ clean:
 	touch logs/.gitkeep
 	rm -f temp/*
 	touch temp/.gitkeep
+	rm -f uploads/*
+	touch uploads/.gitkeep
 fclean: clean
 	rm -f $(name) $(test_name)
 re: fclean

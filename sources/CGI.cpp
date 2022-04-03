@@ -61,15 +61,15 @@ void CGI::execute(void)
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
             close(tmp_cgi_file_in);
-            char *arg1 = strdup(meta_variables["SCRIPT_NAME"].c_str());
             // char *arg1 = strdup("cgi_tester");
             // char **args = (char **)malloc(3 * sizeof(char *));
             // args[0] = strdup("/usr/bin/php");
             // args[1] = arg1;
             // args[2] = NULL;
             char **args = (char **)malloc(3 * sizeof(char *));
+            char *arg1 = strdup(meta_variables["SCRIPT_NAME"].c_str());
+            char *arg2 = strdup(meta_variables["PATH_TRANSLATED"].c_str());
             args[0] = arg1;
-            char *arg2 = strdup(meta_variables["PATH_INFO"].c_str());
             args[1] = arg2; // cwd + request.target
             args[2] = NULL;
             char **env = (char **)malloc(sizeof(char *) * (1 + meta_variables.size()));

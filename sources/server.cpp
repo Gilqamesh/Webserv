@@ -108,11 +108,18 @@ http_request server::parse_request_header(int socket)
         // for (std::vector<char>::iterator it2 = main_vec.begin(); it2 != main_vec.end(); ++it2)
         //     printf("[%d] ", *it2);
         // LOG("");
+        PRINT_HERE();
+        if (main_vec.size() < 5)
+        {
+            WARN("chunked request had syntax error");
+            return (http_request::reject_http_request());
+        }
         if (*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r' && *(it - 5) == '0')
         {
             finished_reading = true;
             get_body();
         }
+        PRINT_HERE();
     }
     else
     {
@@ -120,16 +127,28 @@ http_request server::parse_request_header(int socket)
             finished_reading = true;
         get_body();
     }
+    PRINT_HERE();
     if (finished_reading == false)
         return (http_request::chunked_http_request());
+    PRINT_HERE();
     main_vec.clear();
+    PRINT_HERE();
     start_body_pos = 0;
 
     http_request request(false);
+    PRINT_HERE();
     request.socket = socket;
+    PRINT_HERE();
     if (chunked == true)
     {
+        PRINT_HERE();
         request.payload = decoding_chunked(request_body);
+        if (request.payload.empty() == true)
+        {
+            WARN("chunked request had syntax error");
+            return (http_request::reject_http_request());
+        }
+        PRINT_HERE();
         if (server_configuration.client_max_body_size != -1
             && chunks_size > server_configuration.client_max_body_size)
         {
@@ -170,6 +189,7 @@ http_request server::parse_request_header(int socket)
     request.URI = request.scheme + ":" + request.net_path;
     if (request.query.length())
         request.URI += "?" + request.query;
+    request.original_target = request.target;
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
@@ -1018,7 +1038,7 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     if ((cwd = getcwd(NULL, 0)) == NULL)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
-    script.add_meta_variable("PATH_INFO", cwd + std::string("/") + request.target);
+    script.add_meta_variable("PATH_INFO", request.original_target);
     // LOG("\nCWD");
     // LOG("cwd            = " << cwd);
     // LOG("request.target = " << request.target);
@@ -1027,7 +1047,7 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     // script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
     // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
     // script.add_meta_variable("PATH_TRANSLATED", "temp/temp_cgi_file_in");
-    script.add_meta_variable("PATH_TRANSLATED", cwd + std::string("/") + request.target);
+    script.add_meta_variable("PATH_TRANSLATED", request.target);
     script.add_meta_variable("QUERY_STRING", request.query);
     script.add_meta_variable("REMOTE_ADDR", request.hostname);
     script.add_meta_variable("REMOTE_HOST", request.hostname);
@@ -1036,15 +1056,15 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     */
     script.add_meta_variable("REQUEST_METHOD", request.method_token);
     if (request.extension.empty() == false)
-        script.add_meta_variable("SCRIPT_NAME", std::string(cwd) + "/" + request.extension);
+        script.add_meta_variable("SCRIPT_NAME", request.extension);
     else
-        script.add_meta_variable("SCRIPT_NAME", "." + request.abs_path);
+        script.add_meta_variable("SCRIPT_NAME", request.abs_path);
     script.add_meta_variable("SERVER_NAME", this->hostname);
     script.add_meta_variable("SERVER_PORT", std::to_string(this->server_port));
     script.add_meta_variable("SERVER_PROTOCOL", this->http_version);
-    std::string tempHost = request.URI;
     // script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
-    script.add_meta_variable("REQUEST_URI", cwd + std::string("/") + request.target);
+    script.add_meta_variable("REQUEST_URI", request.original_target);
+    // std::string tempHost = request.URI;
     // LOG("ASCII");
     // for (unsigned int i = 0; i < tempHost.size(); ++i)
     //     printf("[%d] ", tempHost[i]);
@@ -1252,6 +1272,10 @@ http_response server::handle_post_request(http_request &request)
     return (response);
 }
 
+/*
+ * Returns unchunked message
+ * empty if 'chunked' is not formatted properly
+ */
 std::string     server::decoding_chunked(const std::string &chunked)
 {
     std::string         unchunked = "";
@@ -1263,25 +1287,36 @@ std::string     server::decoding_chunked(const std::string &chunked)
     while (true)
     {
         // get chunked-hexdecimal size
-        for (; chunked[i] != '\r' && chunked[i] != ' '; ++i)
-            hexdec_size += chunked[i];
+        for (; i != chunked.size() && chunked[i] != '\n'; ++i)
+        {
+            PRINT_HERE();
+            if (chunked[i] != '\r')
+                hexdec_size += chunked[i];
+            PRINT_HERE();
+        }
+        if (i == chunked.size())
+            return ("");
         // transform chunk-size from hexdezimal to decimal
         ss << std::hex << hexdec_size;
         ss >> chunked_size;
         ss.clear();
         chunks_size += chunked_size;
         if (chunked_size < 1)
-            break;
-        // getting to body;
-        while (chunked[i] != '\n')
-            i++;
+            break ;
+        // getting to body by skipping over \n
+        ++i;
+        if (i == chunked.size())
+            return ("");
         // read chunked body
         for (int j = 0; j < chunked_size; ++j)
-            unchunked += chunked[++i];
+            unchunked.push_back(chunked[++i]);
         // getting to chunked_size()
-        while (chunked[i] != '\n')
-            i++;
-        i++;
+        for (; i != chunked.size() && chunked[i] != '\n'; ++i)
+            ;
+        if (i == chunked.size())
+            return ("");
+        // getting to hexadecimal chunk size by skipping over \n
+        ++i;
         hexdec_size.clear();
     }
     return unchunked;

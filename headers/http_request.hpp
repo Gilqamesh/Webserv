@@ -16,6 +16,7 @@ struct http_request
     /* Request Line RFC7230/3.1.1. */
     std::string                                     method_token;
     std::string                                     target; /* abs_path RFC2396/3., ex. /about.txt?q=hi */
+    std::string                                     original_target;
     std::string                                     protocol_version;
 
     std::map<std::string, std::string>              header_fields;
