@@ -1293,7 +1293,7 @@ std::pair<std::string, bool>     server::decoding_chunked(const std::string &chu
         }
         // read chunked body
         for (int j = 0; j < chunked_size; ++j)
-            unchunked.push_back(chunked[++i]);
+            unchunked.push_back(chunked[i++]);
         // getting to chunked_size()
         for (; i != chunked.size() && chunked[i] != '\n'; ++i)
             ;
