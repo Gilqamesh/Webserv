@@ -32,6 +32,7 @@ clean:
 	rm -f uploads/*
 	touch uploads/.gitkeep
 	echo -n > YoupiBanane/youpi.bla
+	echo -n > YoupiBanane/youpla.bla
 fclean: clean
 	rm -f $(name) $(test_name)
 re: fclean

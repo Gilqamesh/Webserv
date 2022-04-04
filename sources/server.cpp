@@ -1,32 +1,29 @@
 #include "server.hpp"
 #include "utils.hpp"
 #include <cstdio>
-#define READ_HTTP_BUFFER_SIZE 4194304
-
-/*
-* helper to initialize some constants
-*/
+#define READ_HTTP_BUFFER_SIZE 16384
 
 void    server::read_request(int fd)
 {   
-    std::vector<char> tmp(READ_HTTP_BUFFER_SIZE);
+    std::vector<char> tmp(READ_HTTP_BUFFER_SIZE, '\0');
     nOfBytesRead = recv(fd, tmp.data(), READ_HTTP_BUFFER_SIZE, 0);
     NETWORK_LOG("nOfBytesRead: " << nOfBytesRead);
     for (size_t i = 0; i < nOfBytesRead; ++i)
         main_vec.push_back(tmp[i]);
-    tmp.clear();
 }
 
 void    server::get_header_fields(void)
 {
-    headerFields.clear();
     std::string tmp;
+    WARN("main_vec first 100 char:");
+    for (unsigned int i = 0; i < 100; ++i)
+        printf("%c", main_vec[i]);
     for (size_t i = 0; i < main_vec.size(); ++i)
     {
         tmp.push_back(main_vec[i]);
         if (main_vec[i] == '\n')
         {
-            if (tmp == "\r\n")
+            if (tmp == "\r\n" || tmp == "\n")
             {
                 start_body_pos = ++i;
 
@@ -41,6 +38,7 @@ void    server::get_header_fields(void)
                 header_is_parsed = true;
                 return ;
             }
+            // WARN("Header field: " << tmp);
             headerFields.push_back(tmp);
             tmp.clear();
         }
@@ -99,19 +97,29 @@ void    server::get_body(void)
 
 http_request server::parse_request_header(int socket)
 {
-    header_is_parsed = false;
     read_request(socket);
     if (header_is_parsed == false)
     {
         get_header_fields();
         if (header_is_parsed == false)
+        {
+            PRINT_HERE();
             return (http_request::chunked_http_request());
+        }
         if (get_header_infos() == false)
         {
+            PRINT_HERE();
+            headerFields.clear();
+            start_body_pos = 0;
+            header_is_parsed = false;
             return (http_request::payload_too_large());
         }
         if (is_post == true && chunked == false && found_content_length == false)
         {
+            PRINT_HERE();
+            headerFields.clear();
+            start_body_pos = 0;
+            header_is_parsed = false;
             return (http_request::reject_http_request());
         }
     }
@@ -124,6 +132,7 @@ http_request server::parse_request_header(int socket)
         // LOG("");
         if (main_vec.size() < 5)
         {
+            header_is_parsed = false;
             WARN("chunked request had syntax error");
             return (http_request::reject_http_request());
         }
@@ -144,6 +153,7 @@ http_request server::parse_request_header(int socket)
     if (finished_reading == false)
         return (http_request::chunked_http_request());
 
+    header_is_parsed = false;
     http_request request(false);
     request.socket = socket;
     if (chunked == true)
@@ -155,11 +165,16 @@ http_request server::parse_request_header(int socket)
         if (retDec.second == false)
         {
             WARN("chunked request had syntax error");
+            headerFields.clear();
             return (http_request::reject_http_request());
         }
         std::vector<std::string> words = conf_file::get_words(headerFields[0]);
         if (words.size() < 2)
+        {
+            PRINT_HERE();
+            headerFields.clear();
             return (http_request::reject_http_request());
+        }
         std::string target(words[1]);
         WARN(target);
         WARN("chunks_size: " << chunks_size);
@@ -174,6 +189,7 @@ http_request server::parse_request_header(int socket)
                     && chunks_size > cit->second.client_max_body_size)
                 {
                     WARN("cit->second.client_max_body_size: " << cit->second.client_max_body_size);
+                    headerFields.clear();
                     return (http_request::payload_too_large());
                 }
                 break ;
@@ -194,6 +210,7 @@ http_request server::parse_request_header(int socket)
 
     if (check_first_line(headerFields[0], request) == false)
     {
+        headerFields.clear();
         return (http_request::reject_http_request());
     }
 
@@ -201,12 +218,14 @@ http_request server::parse_request_header(int socket)
     {
         if (check_prebody(headerFields[i], request) == false)
         {
+            headerFields.clear();
             return (http_request::reject_http_request());
         }
     }
 
     if (request.header_fields.count("Host") == 0)
     {
+        headerFields.clear();
         return (http_request::reject_http_request());
     }
     request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
@@ -405,10 +424,14 @@ void server::handle_connection(int socket)
     if (request.too_large == true)
     {
         router(socket, http_response::tooLargeResponse());
+        headerFields.clear();
         return ;
     }
     if (request.reject == false && finished_reading == false)
+    {
+        WARN(__LINE__);
         return ;
+    }
     LOG("Request target: " << request.target);
     std::string redirectionStr = isAllowedDirectory3(request.target);
     LOG("isAllowedDirectory3(request.target): " << redirectionStr);
@@ -434,6 +457,7 @@ void server::handle_connection(int socket)
         http_response response = http_response::reject_http_response();
         router(socket, response);
         cut_connection(socket);
+        headerFields.clear();
         return ;
     }
     PRINT_HERE();
@@ -496,10 +520,12 @@ bool            server::check_prebody(std::string current_line,  http_request &r
     }
     if (match(current_line, HEADER_FIELD_PATTERN) == false)
     {
-        LOG("ASCII");
-        for (size_t i = 0; i < current_line.size(); ++i)
-            printf("[%d] ", current_line[i]);
-        LOG("current_line: " << current_line);
+        // LOG("ASCII");
+        // for (size_t i = 0; i < current_line.size(); ++i)
+        //     printf("[%d] ", current_line[i]);
+        // LOG("current_line: " << current_line);
+        PRINT_HERE();
+        WARN("PRINT_HERE();");
         return (false); /* 400 bad request (syntax error) */
     }
     std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
@@ -722,9 +748,13 @@ http_response server::format_http_response(http_request& request)
             extension = request.target.substr(pos);
         request.extension = server_configuration.general_cgi_path;
         if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
+        {
+            PRINT_HERE();
             return (handle_post_request(request));
+        }
     }
 
+    WARN("request.reject: " << request.reject);
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
@@ -1235,7 +1265,7 @@ http_response server::handle_post_request(http_request &request)
             LOG("*it: " << *it);
             if (*it == "PUT" && request.method_token == "PUT")
             { /* check if files exists -> if so update it */
-                std::ofstream uploaded_file(std::string("uploads") + (request.underLocation.front() == '/' ? "" : "/") + request.underLocation);
+                std::ofstream uploaded_file(request.underLocation);
                 LOG("request.underLocation: " << request.underLocation);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + request.underLocation);
@@ -1261,7 +1291,7 @@ http_response server::handle_post_request(http_request &request)
             }
             else if (*it == "POST" && request.method_token == "POST")
             { /* creates and overwrites resource */
-                std::ofstream uploaded_file(std::string("uploads") + (request.underLocation.front() == '/' ? "" : "/") + request.underLocation);
+                std::ofstream uploaded_file(request.underLocation);
                 PRINT_HERE();
                 WARN("request.underLocation: " << request.underLocation);
                 LOG("uploaded_file: " << uploaded_file);
