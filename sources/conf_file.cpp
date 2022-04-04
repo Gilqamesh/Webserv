@@ -155,7 +155,7 @@ void					conf_file::parse_location(int idx, int start)
 			if (!_location_buf.index.empty())
 				error("index already exist");
 			_location_buf.index = words[1];
-			_location_buf.media_type = words[1].substr(words[1].find_last_of('.'), words[1].size());
+//			_location_buf.media_type = words[1].substr(words[1].find_last_of('.'), words[1].size());
 		}
 		else if (words.size() >= 2 && words.front() == "method")
 		{
@@ -185,6 +185,12 @@ void					conf_file::parse_location(int idx, int start)
 				error("redirect already exists");
 			_location_buf.redirect = words.back();
 		}
+        else if (words.size() == 2 && words.front() == "client_max_body_size")
+		{
+			if (_location_buf.client_max_body_size != -1)
+				error("client_max_body_size already exists");
+			_location_buf.client_max_body_size = convert_to_bytes(words.back());
+		}
 		else if (words.size() == 2 && words.front() == "autoindex")
 		{
 			if (_location_buf.autoindex != -1)
@@ -199,7 +205,7 @@ void					conf_file::parse_location(int idx, int start)
 		else
 			error("wrong location config name");
 		start++;
-	}
+	}   
 	_server_buf.locations.push_back(_location_buf);
 	update_location_buffer();
 }
@@ -225,6 +231,7 @@ void						conf_file::update_server_buffer()
 void						conf_file::update_location_buffer()
 {
 	_location_buf.autoindex = -1;
+    _location_buf.client_max_body_size = -1;
 	if (!_location_buf.root.empty())
 		_location_buf.root.clear();
 	if (!_location_buf.index.empty())

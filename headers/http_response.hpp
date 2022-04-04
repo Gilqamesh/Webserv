@@ -12,6 +12,8 @@ struct http_response
     static http_response reject_http_response();
     static http_response cgi_response();
 
+    static http_response tooLargeResponse();
+
     /* Status Line RFC7230/3.1.2. */
     std::string                                     http_version;
     std::string                                     status_code;

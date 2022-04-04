@@ -107,24 +107,44 @@ void CGI::execute(void)
             TERMINATE(("stat failed on file " + request->underLocation).c_str());
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
-        cgiResponse += "Content-Length: " + std::to_string(fileInfo.st_size) + "\n";
+        cgiResponse += "Content-Length: " + std::to_string(request->payload.size()) + "\n";
         cgiResponse += "Connection: close\n";
         cgiResponse += "\n";
-        write(m_pipe[WRITE_END], cgiResponse.data(), cgiResponse.size());
-        close(m_pipe[WRITE_END]);
         /*
          * store the output of the cgi to temp/temp_cgi_file_out as well
          */
-        int fd = open("temp/temp_cgi_file_out", O_WRONLY | O_CREAT | O_TRUNC, 0777);
-        if (fd == -1)
+        int cgiNetworkTempFile = open("temp/temp_cgi_file_out", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        if (cgiNetworkTempFile == -1)
             TERMINATE("failed to open for writing: temp/temp_cgi_file_out");
-        int fd2 = open(request->underLocation.c_str(), O_RDONLY);
-        if (fd2 == -1)
+        // WARN("request->underLocation: " << request->underLocation);
+        int requestUpload = open(request->underLocation.c_str(), O_RDONLY);
+        if (requestUpload == -1)
             TERMINATE(("failed to open for reading: " + request->underLocation).c_str());
-        char buffer[4096];
+        // WARN("skipping header");
+        char buffer[2];
+        std::string requestUploadHeader(100000, '\0');
         while (1)
         {
-            int readRet = read(fd2, buffer, 4096);
+            int tmp = read(requestUpload, buffer, 1);
+            if (tmp == -1)
+            {
+                TERMINATE("read failed");
+            }
+            if (tmp == 0)
+                break ;
+            buffer[tmp] = '\0';
+            requestUploadHeader += buffer;
+            // WARN(requestUploadHeader);
+            if (requestUploadHeader.size() > 3 && (requestUploadHeader.substr(requestUploadHeader.size() - 4) == "\r\n\r\n"
+                || requestUploadHeader.substr(requestUploadHeader.size() - 2) == "\n\n"))
+                break ;
+        }
+        // WARN("in cgi");
+        write(cgiNetworkTempFile, cgiResponse.data(), cgiResponse.size());
+        char buffer2[4096];
+        while (1)
+        {
+            int readRet = read(requestUpload, buffer2, 4095);
             if (readRet == -1)
             {
                 PRINT_HERE();
@@ -133,10 +153,14 @@ void CGI::execute(void)
             }
             if (readRet == 0)
                 break ;
-            write(fd, buffer, readRet);
+            write(cgiNetworkTempFile, buffer2, readRet);
+            buffer2[readRet] = '\0';
+            // WARN(buffer2);
         }
-        close(fd);
-        close(fd2);
+        close(cgiNetworkTempFile);
+        close(requestUpload);
+        write(m_pipe[WRITE_END], "\n", 1);
+        close(m_pipe[WRITE_END]);
         exit(0);
     }
 }

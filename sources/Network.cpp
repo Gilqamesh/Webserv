@@ -40,23 +40,28 @@ void Network::runNetwork()
                 assert(cgi_responses.count(*(int *)events[i].udata) != 0);
                 if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
                 {
-                    std::string response;
-                    char *curLine;
-                    while ((curLine = get_next_line(*(int *)events[i].udata)))
-                    {
-                        response += std::string(curLine);
-                        free(curLine);
-                    }
-                    send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
-                    LOG("CGI Response:\n" << response);
-                    response.clear();
+                    // char *curLine;
+                    // while ((curLine = get_next_line(*(int *)events[i].udata)))
+                    // {
+                    //     response += std::string(curLine);
+                    //     free(curLine);
+                    // }
+                    // WARN("response:");
+                    // WARN(response);
+                    // send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
+                    // LOG("CGI Response:\n" << response);
                     int cgi_out = open("temp/temp_cgi_file_out", O_RDONLY);
                     if (cgi_out == -1)
                         WARN("open failed for reading: temp/temp_cgi_file_out");
+                    struct stat fileInfo;
+                    if (stat("temp/temp_cgi_file_out", &fileInfo) == -1)
+                        TERMINATE("stat failed on file: temp/temp_cgi_file_out");
+                    WARN("stat(temp/temp_cgi_file_out): " << fileInfo.st_size);
                     char buffer[4096];
+                    int accumulatedValue = 0;
                     while (1)
                     {
-                        int readRet = read(cgi_out, buffer, 4096);
+                        int readRet = read(cgi_out, buffer, 4095);
                         if (readRet == -1)
                         {
                             PRINT_HERE();
@@ -65,8 +70,12 @@ void Network::runNetwork()
                         }
                         if (readRet == 0)
                             break ;
-                        send(cgi_responses[*(int *)events[i].udata], buffer, readRet, 0);
+                        accumulatedValue += send(cgi_responses[*(int *)events[i].udata], buffer, readRet, 0);
+                        usleep(1000);
+                        buffer[readRet] = '\0';
                     }
+                    WARN(accumulatedValue);
+                    // WARN("response: " << response);
                     close(cgi_out);
                     /* cut connection with the client */
                     usleep(10000);

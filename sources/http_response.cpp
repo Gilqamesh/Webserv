@@ -27,3 +27,15 @@ http_response http_response::cgi_response()
     res.handled_by_cgi = true;
     return (res);
 }
+
+http_response http_response::tooLargeResponse()
+{
+    http_response res;
+    res.http_version = "HTTP/1.1";
+    res.status_code = "413";
+    res.reason_phrase = "Payload Too Large";
+    res.header_fields["Connection"] = "close";
+    res.header_fields["Content-Type"] = "text/html";
+    res.header_fields["Content-Length"] = "0";
+    return (res);
+}

@@ -9,6 +9,7 @@ source_directory = sources
 object_directory = objects
 
 $(name): $(object_directory)/main.o $(foreach file,$(server_files:.cpp=.o),$(object_directory)/$(file))
+	echo -n > YoupiBanane/youpi.bla
 	$(compiler) $(link_flags) -o $@ $(object_directory)/main.o $(foreach file,$(server_files:.cpp=.o),$(object_directory)/$(file))
 
 # main.cpp
@@ -30,6 +31,7 @@ clean:
 	touch temp/.gitkeep
 	rm -f uploads/*
 	touch uploads/.gitkeep
+	echo -n > YoupiBanane/youpi.bla
 fclean: clean
 	rm -f $(name) $(test_name)
 re: fclean

@@ -12,6 +12,7 @@ struct http_request
 
     static http_request reject_http_request(void);
     static http_request chunked_http_request(void);
+    static http_request payload_too_large(void);
 
     /* Request Line RFC7230/3.1.1. */
     std::string                                     method_token;
@@ -40,6 +41,8 @@ struct http_request
     int                                             socket; /* request is read from this socket */
     std::string                                     extension; /* general_cgi_path */
     std::string                                     underLocation; /* request target with index substituted */
+
+    bool                                            too_large;
 };
 
 #endif
