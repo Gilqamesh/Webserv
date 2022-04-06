@@ -1,0 +1,11 @@
+[18:22:04]  Client joined from socket: 8
+nOfBytesRead: 93
+Log ID: 0
+[18:22:04]  REQUEST  -> [method: GET] [target: /] [version: HTTP/1.1]
+Log ID: 1
+[18:22:04]  RESPONSE -> [status: 200 - OK]
+nOfBytesRead: 152
+Log ID: 2
+[18:22:04]  REQUEST  -> [method: POST] [target: /] [version: HTTP/1.1]
+Log ID: 3
+[18:22:04]  RESPONSE -> [status: 405 - Method Not Allowed]

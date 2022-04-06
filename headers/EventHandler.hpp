@@ -3,7 +3,7 @@
 
 # include "header.hpp"
 
-# define MAX_EVENTS 32
+# define MAX_EVENTS 128 // for kqueue 
 
 class EventHandler
 {

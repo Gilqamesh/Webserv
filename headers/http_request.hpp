@@ -8,6 +8,7 @@ struct http_request
 {
     http_request();
     http_request(bool r);
+    http_request(const http_request &other);
     ~http_request();
 
     static http_request reject_http_request(void);
@@ -21,8 +22,10 @@ struct http_request
     std::string                                     protocol_version;
 
     std::map<std::string, std::string>              header_fields;
-    std::string                                     payload; /* message body RFC7230/3.3.*/
+    // 'payload' is shallow copy
+    std::string                                     *payload; /* message body RFC7230/3.3.*/
     bool                                            reject;
+    bool                                            chunked;
 
     /* Information of the sender of the request */
     std::string                                     hostname; /* ipv4 | ipv6 */

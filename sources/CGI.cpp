@@ -44,7 +44,7 @@ void CGI::execute(void)
             /*
              * Experimentation on sending the request header field to the CGI as well
              */
-            write(tmp_cgi_file_in, request->payload.data(), request->payload.length());
+            write(tmp_cgi_file_in, request->payload->data(), request->payload->length());
             close(tmp_cgi_file_in);
             tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_RDONLY);
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
@@ -81,7 +81,7 @@ void CGI::execute(void)
             TERMINATE(("stat failed on file " + request->underLocation).c_str());
         std::string cgiResponse = "HTTP/1.1 200 OK \nContent-Location: " + request->target + "\n";
         cgiResponse += "Content-Type: text/html\n";
-        cgiResponse += "Content-Length: " + std::to_string(request->payload.size()) + "\n";
+        cgiResponse += "Content-Length: " + std::to_string(request->payload->size()) + "\n";
         cgiResponse += "Connection: close\n";
         cgiResponse += "\n";
         /*
@@ -108,7 +108,6 @@ void CGI::execute(void)
                 break ;
             buffer[tmp] = '\0';
             requestUploadHeader += buffer;
-            // WARN(requestUploadHeader);
             if (requestUploadHeader.size() > 3 && (requestUploadHeader.substr(requestUploadHeader.size() - 4) == "\r\n\r\n"
                 || requestUploadHeader.substr(requestUploadHeader.size() - 2) == "\n\n"))
                 break ;

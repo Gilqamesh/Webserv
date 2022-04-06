@@ -13,6 +13,7 @@
 # include "resource.hpp"
 # include "CGI.hpp"
 # include "conf_file.hpp"
+# include "HttpObject.hpp"
 
 # include <sys/types.h> // kqueue, kevent, EV_SET
 # include <sys/event.h>
@@ -21,8 +22,6 @@
 #include <sys/stat.h> // check if file exists
 
 #include <ctime> // to get current time
-
-# define MAX_EVENTS 32 
 
 # define HEADER_WHITESPACES " \t"
 # define HEADER_FIELD_PATTERN "[^ \t:]*:[ \t]*[ -~]*[ \t]*"
@@ -37,7 +36,6 @@ private:
     int                                 server_backlog; /* server_socket_fd - backlog */
     std::map<std::string, resource>     cached_resources; /* route - resource */
     std::map<int, int>                  *cgi_responses; /* cgi socket - client socket */
-    // std::map<int, unsigned long>        connected_sockets_map; /* socket - timestamp */
     /* constants */ 
     std::set<std::string>               accepted_request_methods;
     std::set<char>                      header_whitespace_characters;
@@ -46,29 +44,19 @@ private:
     std::string                         hostname; /* ipv4 */
     int                                 current_number_of_connections;
     EventHandler                        *events;
-
-    std::vector<std::string>            headerFields;
-    // std::string                         method;
-    bool                                found_content_length;
-    bool                                finished_reading;
-    bool                                header_is_parsed;
-    bool                                chunked;
-    bool                                is_post;
-    bool                                cutConnection;
-    size_t                              content_length;
-    size_t                              readRequestPosition;
-    size_t                              nOfBytesRead;
-    std::string                         request_body;
-    std::vector<char>                   main_vec;
     t_server                            server_configuration;
-    long long                           chunks_size;
-    std::string                         current_header_field;
+
+    /*
+     * created when we start reading from a socket 
+     * destroyed when we cut connection with the socket
+     */
+    std::map<int, HttpObject *>         currentHttpObjects;
 public:
 
     void            read_request(int fd);
-    void            get_header_fields(void);
-    bool            get_header_infos(void);
-    void            get_body(void);
+    void            get_header_fields(int socket);
+    bool            get_header_infos(int socket);
+    void            get_body(int socket);
     bool            check_first_line(std::string, http_request&);
     bool            check_prebody(std::string, http_request&);
 
@@ -121,8 +109,7 @@ private:
     std::string     isAllowedDirectory3(const std::string &target);
 
     http_response   handle_post_request(http_request &request);
-    std::pair<std::string, bool>     decoding_chunked(const std::string &chunked);
-    void            reset_vars(void);
+    std::pair<std::string *, bool>     decoding_chunked(const std::string &chunked, int socket);
     void            parse_URI(http_request &request);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */

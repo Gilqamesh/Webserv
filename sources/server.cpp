@@ -6,60 +6,53 @@
 void    server::read_request(int fd)
 {
     std::vector<char> tmp(READ_HTTP_BUFFER_SIZE, '\0');
-    nOfBytesRead = recv(fd, tmp.data(), READ_HTTP_BUFFER_SIZE, 0);
-    NETWORK_LOG("nOfBytesRead: " << nOfBytesRead);
-    for (size_t i = 0; i < nOfBytesRead; ++i)
-        main_vec.push_back(tmp[i]);
+    currentHttpObjects[fd]->nOfBytesRead = recv(fd, tmp.data(), READ_HTTP_BUFFER_SIZE, 0);
+    NETWORK_LOG("nOfBytesRead: " << currentHttpObjects[fd]->nOfBytesRead);
+    for (size_t i = 0; i < currentHttpObjects[fd]->nOfBytesRead; ++i)
+        currentHttpObjects[fd]->main_vec->push_back(tmp[i]);
 }
 
-/*
-key: value\n
-key2: value2\n
-\n
-body
-*/
-void    server::get_header_fields(void)
+void    server::get_header_fields(int socket)
 {
-    for (size_t i = readRequestPosition; i < main_vec.size(); ++i, ++readRequestPosition)
+    for (size_t i = currentHttpObjects[socket]->readRequestPosition; i < currentHttpObjects[socket]->main_vec->size(); ++i, ++currentHttpObjects[socket]->readRequestPosition)
     {
-        current_header_field.push_back(main_vec[i]);
-        if (main_vec[i] == '\n')
+        currentHttpObjects[socket]->current_header_field.push_back((*currentHttpObjects[socket]->main_vec)[i]);
+        if ((*currentHttpObjects[socket]->main_vec)[i] == '\n')
         {
-            if (current_header_field == "\r\n" || current_header_field == "\n")
+            if (currentHttpObjects[socket]->current_header_field == "\r\n" || currentHttpObjects[socket]->current_header_field == "\n")
             {
-                ++readRequestPosition;
+                ++currentHttpObjects[socket]->readRequestPosition;
                 /*
                  * Remove ending '\r' and '\n' characters from each header field
                  */
-                for (size_t j = 0; j < headerFields.size(); ++j)
+                for (size_t j = 0; j < currentHttpObjects[socket]->headerFields.size(); ++j)
                 {
-                    if (headerFields[j].empty())
-                        TERMINATE(("headerFields[j]: " + std::to_string(j) + ", is empty").c_str());
-                    while (headerFields[j].back() == '\r' || headerFields[j].back() == '\n')
-                        headerFields[j].pop_back();
+                    if (currentHttpObjects[socket]->headerFields[j].empty())
+                        TERMINATE(("currentHttpObjects[socket]->headerFields[j]: " + std::to_string(j) + ", is empty").c_str());
+                    while (currentHttpObjects[socket]->headerFields[j].back() == '\r' || currentHttpObjects[socket]->headerFields[j].back() == '\n')
+                        currentHttpObjects[socket]->headerFields[j].pop_back();
                 }
-                header_is_parsed = true;
+                currentHttpObjects[socket]->header_is_parsed = true;
                 return ;
             }
-            // WARN("Header field: " << current_header_field);
-            headerFields.push_back(current_header_field);
-            current_header_field.clear();
+            currentHttpObjects[socket]->headerFields.push_back(currentHttpObjects[socket]->current_header_field);
+            currentHttpObjects[socket]->current_header_field.clear();
         }
     }
 }
 
-bool    server::get_header_infos(void)
+bool    server::get_header_infos(int socket)
 {
-    for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
+    for (std::vector<std::string>::iterator it = currentHttpObjects[socket]->headerFields.begin(); it != currentHttpObjects[socket]->headerFields.end(); ++it)
     {
         if ((*it).find("POST") != std::string::npos)
-            is_post = true;
+            currentHttpObjects[socket]->is_post = true;
         else if ((*it).find("Transfer-Encoding: chunked") != std::string::npos)
-            chunked = true;
+            currentHttpObjects[socket]->chunked = true;
         else if ((*it).find("Content-Length") != std::string::npos)
         {
-            found_content_length = true;
-            std::vector<std::string> words = conf_file::get_words(headerFields[0]);
+            currentHttpObjects[socket]->found_content_length = true;
+            std::vector<std::string> words = conf_file::get_words(currentHttpObjects[socket]->headerFields[0]);
             if (words.size() < 2)
                 return (false);
             std::string target(words[1]);
@@ -81,32 +74,32 @@ bool    server::get_header_infos(void)
     return (true);
 }
 
-void    server::get_body(void)
+void    server::get_body(int socket)
 {
-    for (; readRequestPosition != main_vec.size(); ++readRequestPosition)
-        request_body += main_vec[readRequestPosition];
+    for (; currentHttpObjects[socket]->readRequestPosition != currentHttpObjects[socket]->main_vec->size(); ++currentHttpObjects[socket]->readRequestPosition)
+        *currentHttpObjects[socket]->request_body += (*currentHttpObjects[socket]->main_vec)[currentHttpObjects[socket]->readRequestPosition];
 }
 
 http_request server::parse_request_header(int socket)
 {
     read_request(socket); // read and append to main_vec
-    if (header_is_parsed == false)
+    if (currentHttpObjects[socket]->header_is_parsed == false)
     {
-        get_header_fields();
-        if (header_is_parsed == false) {
+        get_header_fields(socket);
+        if (currentHttpObjects[socket]->header_is_parsed == false) {
             return (http_request::chunked_http_request());
         }
-        if (get_header_infos() == false) {
+        if (get_header_infos(socket) == false) {
             return (http_request::payload_too_large());
         }
-        if (is_post == true && chunked == false && found_content_length == false) {
+        if (currentHttpObjects[socket]->is_post == true && currentHttpObjects[socket]->chunked == false && currentHttpObjects[socket]->found_content_length == false) {
             return (http_request::reject_http_request());
         }
     }
-    if (chunked == true)
+    if (currentHttpObjects[socket]->chunked == true)
     {
-        std::vector<char>::iterator it = main_vec.end();
-        if (main_vec.size() < 5)
+        std::vector<char>::iterator it = currentHttpObjects[socket]->main_vec->end();
+        if (currentHttpObjects[socket]->main_vec->size() < 5)
         {
             WARN("chunked request had syntax error");
             return (http_request::reject_http_request());
@@ -115,8 +108,8 @@ http_request server::parse_request_header(int socket)
         if ((*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r' && *(it - 5) == '0')
             || (*(it - 1) == '\n' && *(it - 2) == '\n' && *(it - 3) == '0'))
         {
-            get_body();
-            finished_reading = true;
+            get_body(socket);
+            currentHttpObjects[socket]->finished_reading = true;
         }
         else
         {
@@ -126,10 +119,10 @@ http_request server::parse_request_header(int socket)
     }
     else
     {
-        get_body();
-        if (request_body.size() == content_length)
+        get_body(socket);
+        if (currentHttpObjects[socket]->request_body->size() == currentHttpObjects[socket]->content_length)
         {
-            finished_reading = true;
+            currentHttpObjects[socket]->finished_reading = true;
         }
         else
         {
@@ -140,18 +133,19 @@ http_request server::parse_request_header(int socket)
 
     http_request request;
     request.socket = socket;
-    if (chunked == true)
+    if (currentHttpObjects[socket]->chunked == true)
     {
-        std::pair<std::string, bool> retDec = decoding_chunked(request_body);
-        WARN("chunks_size: " << chunks_size);
+        std::pair<std::string *, bool> retDec = decoding_chunked(*currentHttpObjects[socket]->request_body, socket);
+        WARN("chunks_size: " << currentHttpObjects[socket]->chunks_size);
         request.payload = retDec.first;
+        request.chunked = true;
         if (retDec.second == false)
         {
             WARN("chunked request had syntax error");
             return (http_request::reject_http_request());
         }
         // check if payload of request is too big
-        std::vector<std::string> words = conf_file::get_words(headerFields[0]);
+        std::vector<std::string> words = conf_file::get_words(currentHttpObjects[socket]->headerFields[0]);
         if (words.size() < 2)
         {
             return (http_request::reject_http_request());
@@ -162,7 +156,7 @@ http_request server::parse_request_header(int socket)
             if (target.substr(0, cit->first.size()) == cit->first)
             {
                 if (cit->second.client_max_body_size != -1
-                    && chunks_size > cit->second.client_max_body_size)
+                    && currentHttpObjects[socket]->chunks_size > cit->second.client_max_body_size)
                 {
                     return (http_request::payload_too_large());
                 }
@@ -170,22 +164,24 @@ http_request server::parse_request_header(int socket)
             }
         }
         if (server_configuration.client_max_body_size != -1
-            && chunks_size > server_configuration.client_max_body_size)
+            && currentHttpObjects[socket]->chunks_size > server_configuration.client_max_body_size)
         {
             return (http_request::payload_too_large());
         }
     }
     else
-        request.payload = request_body;
+    {
+        request.payload = currentHttpObjects[socket]->request_body;
+    }
 
-    if (check_first_line(headerFields[0], request) == false)
+    if (check_first_line(currentHttpObjects[socket]->headerFields[0], request) == false)
     {
         return (http_request::reject_http_request());
     }
 
-    for (size_t i = 1; i < headerFields.size(); ++i)
+    for (size_t i = 1; i < currentHttpObjects[socket]->headerFields.size(); ++i)
     {
-        if (check_prebody(headerFields[i], request) == false)
+        if (check_prebody(currentHttpObjects[socket]->headerFields[i], request) == false)
         {
             return (http_request::reject_http_request());
         }
@@ -198,6 +194,7 @@ http_request server::parse_request_header(int socket)
     parse_URI(request);
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
+    PRINT_HERE();
     return (request);
 }
 
@@ -226,7 +223,6 @@ const t_server &configuration)
     events = eventQueue;
     server_configuration = configuration;
     locations = configuration.locations;
-    reset_vars();
 
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
@@ -374,17 +370,25 @@ void server::cut_connection(int socket)
 
 void server::handle_connection(int socket)
 {
+    if (currentHttpObjects.count(socket) == 0)
+    {
+        currentHttpObjects[socket] = new HttpObject();
+    }
+    PRINT_HERE();
     http_request request = parse_request_header(socket);
+    PRINT_HERE();
     if (request.too_large == true)
     {
-        cutConnection = true;
+        currentHttpObjects[socket]->cutConnection = true;
         router(socket, http_response::tooLargeResponse());
         return ;
     }
-    if (request.reject == false && finished_reading == false)
+    PRINT_HERE();
+    if (request.reject == false && currentHttpObjects[socket]->finished_reading == false)
     {
         return ;
     }
+    PRINT_HERE();
     // check if redirection or not
     std::string redirectionStr = isAllowedDirectory3(request.target);
     if (redirectionStr.size()) { /* redirect client to reformatted target */
@@ -393,23 +397,29 @@ void server::handle_connection(int socket)
     } else {
         request.redirected = false;
     }
+    PRINT_HERE();
     /* httpRequest is only for logging */
-    std::string httpRequest;
-    for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
-        httpRequest += *it + "\n";
-    httpRequest += "\n";
-    httpRequest += request_body;
-    HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-        << std::endl << displayTimestamp() << " [REQUEST from socket - " << socket << "]" << std::endl
-        << httpRequest << std::endl
-        << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-    if (is_post == true && found_content_length == false && chunked == false)
+    if (currentHttpObjects[socket]->request_body->size() < 10000)
+    {
+        std::string httpRequest;
+        for (std::vector<std::string>::iterator it = currentHttpObjects[socket]->headerFields.begin(); it != currentHttpObjects[socket]->headerFields.end(); ++it)
+            httpRequest += *it + "\n";
+        httpRequest += "\n";
+        httpRequest += *currentHttpObjects[socket]->request_body;
+        HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+            << std::endl << displayTimestamp() << " [REQUEST from socket - " << socket << "]" << std::endl
+            << httpRequest << std::endl
+            << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
+    }
+    PRINT_HERE();
+    if (currentHttpObjects[socket]->is_post == true && currentHttpObjects[socket]->found_content_length == false && currentHttpObjects[socket]->chunked == false)
     {
         http_response response = http_response::reject_http_response();
-        cutConnection = true;
+        currentHttpObjects[socket]->cutConnection = true;
         router(socket, response);
         return ;
     }
+    PRINT_HERE();
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
@@ -418,14 +428,17 @@ void server::handle_connection(int socket)
     inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, buffer, INET_ADDRSTRLEN);
     request.hostname = buffer;
     request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
+    PRINT_HERE();
 
     http_response response = format_http_response(request);
+    PRINT_HERE();
     if (response.handled_by_cgi == false)
     {
         if (response.reject == true)
-            cutConnection = true;
+            currentHttpObjects[socket]->cutConnection = true;
         router(socket, response);
     }
+    PRINT_HERE();
 }
 
 bool    server::check_first_line(std::string current_line, http_request &request)
@@ -977,16 +990,21 @@ void server::router(int socket, const http_response &response)
     // LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
-    /* reset everything in server object */
-    reset_vars();
     // if message too big this might be a problem so we need to iterate and send message back by parts
     size_t send_ret = send(socket, message.c_str(), message.length(), 0);
     WARN("These two should be the same:");
     WARN("send ret: " << send_ret << ", message.length(): " << message.length());
     // idk if needed
     usleep(10000);
-    if (cutConnection == true)
+    assert(currentHttpObjects[socket]);
+    if (currentHttpObjects[socket]->cutConnection == true)
+    {
         cut_connection(socket);
+    }
+    PRINT_HERE();
+    delete currentHttpObjects[socket];
+    PRINT_HERE();
+    currentHttpObjects.erase(socket);
 }
 
 void server::send_timeout(int socket)
@@ -997,7 +1015,7 @@ void server::send_timeout(int socket)
     response.reason_phrase = "Request Timeout";
     response.header_fields["Connection"] = "close";
     response.payload = cached_resources["/error"].content;
-    cutConnection = true;
+    currentHttpObjects[socket]->cutConnection = true;
     router(socket, response);
 }
 
@@ -1006,8 +1024,8 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
 {
     request.target = isAllowedDirectory2(request.target);
     // script.add_meta_variable("AUTH_TYPE", "");
-    if (request.payload.empty() == false)
-        script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload.length()));
+    if (request.payload->empty() == false)
+        script.add_meta_variable("CONTENT_LENGTH", std::to_string(request.payload->length()));
     // if (request.header_fields.count("Content-Type"))
         // script.add_meta_variable("CONTENT_TYPE", request.header_fields.at("Content-Type"));
     // script.add_meta_variable("CONTENT_TYPE", "test/file");
@@ -1186,9 +1204,7 @@ http_response server::handle_post_request(http_request &request)
                 std::ofstream uploaded_file(request.underLocation);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + request.underLocation);
-                // LOG(request.payload);
-                uploaded_file << request.payload;
-                // LOG("request.payload: " << request.payload);
+                uploaded_file << *request.payload;
                 http_response response;
                 response.http_version = "HTTP/1.1";
                 if (request.redirected == false) {
@@ -1200,8 +1216,6 @@ http_response server::handle_post_request(http_request &request)
                     response.reason_phrase = "Moved Permanently";
                 }
                 response.header_fields["Content-Type"] = "text/html";
-                // response.header_fields["Content-Length"] = std::to_string(request.payload.size());
-                // response.payload = request.payload;
                 response.header_fields["Connection"] = "close";
                 response.header_fields["Content-Length"] = std::to_string(0);
                 return (response);
@@ -1211,8 +1225,7 @@ http_response server::handle_post_request(http_request &request)
                 std::ofstream uploaded_file(request.underLocation);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + request.underLocation);
-                uploaded_file << request.payload;
-                // LOG("request.payload: " << request.payload);
+                uploaded_file << *request.payload;
                 http_response response;
                 response.http_version = "HTTP/1.1";
                 if (request.redirected == false) {
@@ -1224,8 +1237,6 @@ http_response server::handle_post_request(http_request &request)
                     response.reason_phrase = "Moved Permanently";
                 }
                 response.header_fields["Content-Type"] = "text/html";
-                // response.header_fields["Content-Length"] = std::to_string(request.payload.size());
-                // response.payload = request.payload;
                 response.header_fields["Connection"] = "close";
                 response.header_fields["Content-Length"] = std::to_string(0);
                 return (response);
@@ -1250,14 +1261,15 @@ http_response server::handle_post_request(http_request &request)
  * Returns unchunked message
  * empty if 'chunked' is not formatted properly
  */
-std::pair<std::string, bool>     server::decoding_chunked(const std::string &chunked)
+std::pair<std::string *, bool>     server::decoding_chunked(const std::string &chunked, int socket)
 {
-    std::string         unchunked = "";
+    std::string         *unchunked;
     std::string         hexdec_size;
     int                 chunked_size;
     std::stringstream   ss;
     size_t              i = 0;
     
+    unchunked = new std::string();
     while (true)
     {
         // get chunked-hexdecimal size
@@ -1268,7 +1280,7 @@ std::pair<std::string, bool>     server::decoding_chunked(const std::string &chu
         }
         if (i == chunked.size() && hexdec_size.empty() == false)
         {
-            return (std::pair<std::string, bool>(unchunked, false));
+            return (std::pair<std::string *, bool>(unchunked, false));
         }
         // transform chunk-size from hexdezimal to decimal
         if (hexdec_size.empty() == true)
@@ -1276,48 +1288,30 @@ std::pair<std::string, bool>     server::decoding_chunked(const std::string &chu
         ss << std::hex << hexdec_size;
         ss >> chunked_size;
         ss.clear();
-        chunks_size += chunked_size;
+        currentHttpObjects[socket]->chunks_size += chunked_size;
         if (chunked_size < 1)
             break ;
         // getting to body by skipping over \n
         ++i;
         if (i == chunked.size())
         {
-            return (std::pair<std::string, bool>(unchunked, false));
+            return (std::pair<std::string *, bool>(unchunked, false));
         }
         // read chunked body
         for (int j = 0; j < chunked_size; ++j)
-            unchunked.push_back(chunked[i++]);
+            unchunked->push_back(chunked[i++]);
         // getting to chunked_size()
         for (; i != chunked.size() && chunked[i] != '\n'; ++i)
             ;
         if (i == chunked.size())
         {
-            return (std::pair<std::string, bool>(unchunked, false));
+            return (std::pair<std::string *, bool>(unchunked, false));
         }
         // getting to hexadecimal chunk size by skipping over \n
         ++i;
         hexdec_size.clear();
     }
-    return (std::pair<std::string, bool>(unchunked, true));
-}
-
-void server::reset_vars(void)
-{
-    chunks_size = 0;
-    main_vec.clear();
-    request_body.clear();
-    nOfBytesRead = 0;
-    readRequestPosition = 0;
-    content_length = 0;
-    is_post = false;
-    chunked = false;
-    header_is_parsed = false;
-    finished_reading = false;
-    found_content_length = false;
-    headerFields.clear();
-    current_header_field.clear();
-    cutConnection = false;
+    return (std::pair<std::string *, bool>(unchunked, true));
 }
 
 void server::parse_URI(http_request &request)

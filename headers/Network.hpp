@@ -8,7 +8,6 @@
 # include <map>
 # include "conf_file.hpp"
 
-# define MAX_EVENTS 32 // for kqueue 
 # define BACKLOG    100
 
 class server;

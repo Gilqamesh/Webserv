@@ -12,8 +12,8 @@ int main(int argc, char **argv)
     if (argc != 2)
         return (1);
 
-	network.initNetwork(argv[1]);
-	network.runNetwork();
+    network.initNetwork(argv[1]);
+    network.runNetwork();
 
     // test_server.cache_file("views/index.html", "/");
     // test_server.cache_file("views/about.html", "/about");
