@@ -48,19 +48,21 @@ private:
     EventHandler                        *events;
 
     std::vector<std::string>            headerFields;
-    std::string                         method;
+    // std::string                         method;
     bool                                found_content_length;
     bool                                finished_reading;
     bool                                header_is_parsed;
     bool                                chunked;
     bool                                is_post;
-    int                                 content_length;
-    size_t                              start_body_pos;
+    bool                                cutConnection;
+    size_t                              content_length;
+    size_t                              readRequestPosition;
     size_t                              nOfBytesRead;
     std::string                         request_body;
     std::vector<char>                   main_vec;
     t_server                            server_configuration;
     long long                           chunks_size;
+    std::string                         current_header_field;
 public:
 
     void            read_request(int fd);
@@ -120,6 +122,8 @@ private:
 
     http_response   handle_post_request(http_request &request);
     std::pair<std::string, bool>     decoding_chunked(const std::string &chunked);
+    void            reset_vars(void);
+    void            parse_URI(http_request &request);
 
     std::vector<t_location> locations; /* a copy of 'locations' coming from the configuration file */
     std::map<std::string, t_location>   sortedRoutes; /* for isAllowedDirectory to handle more specific routes first instead of the generic ones */

@@ -10,12 +10,7 @@ CGI::CGI(int pipe[2], http_request *httpRequest)
     m_pipe[0] = pipe[0];
     m_pipe[1] = pipe[1];
     /* Set up meta_variables RFC3875/4.1., some of this comes from the calling server */
-    // meta_variables["GATEWAY_INTERFACE"] = "CGI/1.1";
-    // LOG_E("Meta variables");
-    // for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
-    // {
-    //     LOG_E(it->first << ": " << it->second);
-    // }
+    meta_variables["GATEWAY_INTERFACE"] = "CGI/1.1";
 }
 
 CGI::~CGI()
@@ -49,21 +44,8 @@ void CGI::execute(void)
             /*
              * Experimentation on sending the request header field to the CGI as well
              */
-            // std::string firstLine = request->method_token + " " + request->target + " " + request->protocol_version + "\r\n";
-            // write(tmp_cgi_file_in, firstLine.c_str(), firstLine.size());
-            // for (std::map<std::string, std::string>::iterator it = request->header_fields.begin();
-            //     it != request->header_fields.end(); ++it)
-            // {
-            //     std::string curHeaderField = it->first + ": " + it->second + "\r\n";
-            //     write(tmp_cgi_file_in, curHeaderField.c_str(), curHeaderField.size());
-            // }
-            // write(tmp_cgi_file_in, "\r\n", 2);
-            LOG_E("Request->payload.size(): " << request->payload.size());
             write(tmp_cgi_file_in, request->payload.data(), request->payload.length());
             close(tmp_cgi_file_in);
-            /*
-             * Turns out this doesn't work to buffer input data?
-             */
             tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_RDONLY);
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
@@ -77,12 +59,10 @@ void CGI::execute(void)
             char **env = (char **)malloc(sizeof(char *) * (1 + meta_variables.size()));
             env[meta_variables.size()] = NULL;
             size_t index = 0;
-            LOG_E("Meta variables");
             for (std::map<std::string, std::string>::iterator it = meta_variables.begin(); it != meta_variables.end(); ++it)
             {
                 if (it->second.back() == '\n')
                     it->second.pop_back();
-                LOG(it->first << ": " << it->second);
                 env[index++] = strdup(std::string(it->first + "=" + it->second).c_str());
             }
             env[index] = NULL;
@@ -92,16 +72,10 @@ void CGI::execute(void)
             if (dup2(tmp_cgi_file_out, STDOUT_FILENO) == -1)
                 TERMINATE("dup2 failed");
             close(tmp_cgi_file_out);
-            for (int i = 0; env[i] != NULL; ++i)
-                dprintf(STDERR_FILENO, "%s\n", env[i]);
-            dprintf(STDERR_FILENO, "arg0: %s\n", args[0]);
-            dprintf(STDERR_FILENO, "arg1: %s\n", args[1]);
             if (execve(args[0], args, env) == -1)
                 TERMINATE("execve failed");
         }
-        PRINT_HERE();
         wait(NULL);
-        PRINT_HERE();
         struct stat fileInfo;
         if (stat(request->underLocation.c_str(), &fileInfo) == -1)
             TERMINATE(("stat failed on file " + request->underLocation).c_str());
@@ -139,7 +113,6 @@ void CGI::execute(void)
                 || requestUploadHeader.substr(requestUploadHeader.size() - 2) == "\n\n"))
                 break ;
         }
-        // WARN("in cgi");
         write(cgiNetworkTempFile, cgiResponse.data(), cgiResponse.size());
         char buffer2[4096];
         while (1)

@@ -4,7 +4,7 @@
 #define READ_HTTP_BUFFER_SIZE 16384
 
 void    server::read_request(int fd)
-{   
+{
     std::vector<char> tmp(READ_HTTP_BUFFER_SIZE, '\0');
     nOfBytesRead = recv(fd, tmp.data(), READ_HTTP_BUFFER_SIZE, 0);
     NETWORK_LOG("nOfBytesRead: " << nOfBytesRead);
@@ -12,36 +12,38 @@ void    server::read_request(int fd)
         main_vec.push_back(tmp[i]);
 }
 
+/*
+key: value\n
+key2: value2\n
+\n
+body
+*/
 void    server::get_header_fields(void)
 {
-    headerFields.clear();
-    std::string tmp;
-    WARN("main_vec first 100 char:");
-    for (unsigned int i = 0; i < 100; ++i)
-        printf("%c", main_vec[i]);
-    for (size_t i = 0; i < main_vec.size(); ++i)
+    for (size_t i = readRequestPosition; i < main_vec.size(); ++i, ++readRequestPosition)
     {
-        tmp.push_back(main_vec[i]);
+        current_header_field.push_back(main_vec[i]);
         if (main_vec[i] == '\n')
         {
-            if (tmp == "\r\n" || tmp == "\n")
+            if (current_header_field == "\r\n" || current_header_field == "\n")
             {
-                start_body_pos = ++i;
-
+                ++readRequestPosition;
                 /*
                  * Remove ending '\r' and '\n' characters from each header field
                  */
                 for (size_t j = 0; j < headerFields.size(); ++j)
                 {
+                    if (headerFields[j].empty())
+                        TERMINATE(("headerFields[j]: " + std::to_string(j) + ", is empty").c_str());
                     while (headerFields[j].back() == '\r' || headerFields[j].back() == '\n')
                         headerFields[j].pop_back();
                 }
                 header_is_parsed = true;
                 return ;
             }
-            // WARN("Header field: " << tmp);
-            headerFields.push_back(tmp);
-            tmp.clear();
+            // WARN("Header field: " << current_header_field);
+            headerFields.push_back(current_header_field);
+            current_header_field.clear();
         }
     }
 }
@@ -81,116 +83,87 @@ bool    server::get_header_infos(void)
 
 void    server::get_body(void)
 {
-    request_body.clear();
-    if (finished_reading == true)
-    {
-        for (; start_body_pos != main_vec.size(); ++start_body_pos)
-            request_body += main_vec[start_body_pos];
-    }
-    else
-    {
-        for (; start_body_pos != nOfBytesRead; ++start_body_pos)
-            request_body += main_vec[start_body_pos];
-    }
-    start_body_pos = 0;
-    main_vec.clear();
+    for (; readRequestPosition != main_vec.size(); ++readRequestPosition)
+        request_body += main_vec[readRequestPosition];
 }
 
 http_request server::parse_request_header(int socket)
 {
-    read_request(socket);
+    read_request(socket); // read and append to main_vec
     if (header_is_parsed == false)
     {
         get_header_fields();
-        if (header_is_parsed == false)
-        {
-            PRINT_HERE();
+        if (header_is_parsed == false) {
             return (http_request::chunked_http_request());
         }
-        if (get_header_infos() == false)
-        {
-            PRINT_HERE();
-            headerFields.clear();
-            start_body_pos = 0;
-            header_is_parsed = false;
+        if (get_header_infos() == false) {
             return (http_request::payload_too_large());
         }
-        if (is_post == true && chunked == false && found_content_length == false)
-        {
-            PRINT_HERE();
-            headerFields.clear();
-            start_body_pos = 0;
-            header_is_parsed = false;
+        if (is_post == true && chunked == false && found_content_length == false) {
             return (http_request::reject_http_request());
         }
     }
     if (chunked == true)
     {
         std::vector<char>::iterator it = main_vec.end();
-        // LOG("ASCII");
-        // for (std::vector<char>::iterator it2 = main_vec.begin(); it2 != main_vec.end(); ++it2)
-        //     printf("[%d] ", *it2);
-        // LOG("");
         if (main_vec.size() < 5)
         {
-            header_is_parsed = false;
             WARN("chunked request had syntax error");
             return (http_request::reject_http_request());
         }
-        if (*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r' && *(it - 5) == '0')
+        // check for null chunk
+        if ((*(it - 1) == '\n' && *(it - 2) == '\r' && *(it - 3) == '\n' && *(it - 4) == '\r' && *(it - 5) == '0')
+            || (*(it - 1) == '\n' && *(it - 2) == '\n' && *(it - 3) == '0'))
         {
-            finished_reading = true;
             get_body();
+            finished_reading = true;
+        }
+        else
+        {
+            // read again
+            return (http_request::chunked_http_request());
         }
     }
     else
     {
-        if (nOfBytesRead < READ_HTTP_BUFFER_SIZE)
-            finished_reading = true;
         get_body();
+        if (request_body.size() == content_length)
+        {
+            finished_reading = true;
+        }
+        else
+        {
+            // read again
+            return (http_request::chunked_http_request());
+        }
     }
-    main_vec.clear();
-    start_body_pos = 0;
-    if (finished_reading == false)
-        return (http_request::chunked_http_request());
 
-    header_is_parsed = false;
-    http_request request(false);
+    http_request request;
     request.socket = socket;
     if (chunked == true)
     {
-        chunks_size = 0;
         std::pair<std::string, bool> retDec = decoding_chunked(request_body);
         WARN("chunks_size: " << chunks_size);
         request.payload = retDec.first;
         if (retDec.second == false)
         {
             WARN("chunked request had syntax error");
-            headerFields.clear();
             return (http_request::reject_http_request());
         }
+        // check if payload of request is too big
         std::vector<std::string> words = conf_file::get_words(headerFields[0]);
         if (words.size() < 2)
         {
-            PRINT_HERE();
-            headerFields.clear();
             return (http_request::reject_http_request());
         }
         std::string target(words[1]);
-        WARN(target);
-        WARN("chunks_size: " << chunks_size);
-        WARN("server_configuration.client_max_body_size: " << server_configuration.client_max_body_size);
         for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
         {
             if (target.substr(0, cit->first.size()) == cit->first)
             {
-                WARN("1");
-                WARN("cit->second.client_max_body_size: " << cit->second.client_max_body_size);
                 if (cit->second.client_max_body_size != -1
                     && chunks_size > cit->second.client_max_body_size)
                 {
-                    WARN("cit->second.client_max_body_size: " << cit->second.client_max_body_size);
-                    headerFields.clear();
                     return (http_request::payload_too_large());
                 }
                 break ;
@@ -199,19 +172,14 @@ http_request server::parse_request_header(int socket)
         if (server_configuration.client_max_body_size != -1
             && chunks_size > server_configuration.client_max_body_size)
         {
-            WARN("3");
             return (http_request::payload_too_large());
         }
     }
     else
         request.payload = request_body;
 
-    // LOG("request_body = \n" << request_body);
-    // LOG("request.payload = \n" << request.payload);
-
     if (check_first_line(headerFields[0], request) == false)
     {
-        headerFields.clear();
         return (http_request::reject_http_request());
     }
 
@@ -219,24 +187,15 @@ http_request server::parse_request_header(int socket)
     {
         if (check_prebody(headerFields[i], request) == false)
         {
-            headerFields.clear();
             return (http_request::reject_http_request());
         }
     }
 
     if (request.header_fields.count("Host") == 0)
     {
-        headerFields.clear();
         return (http_request::reject_http_request());
     }
-    request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
-    request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
-    if (request.target.find_first_of('?') != std::string::npos)
-        request.query = request.target.substr(request.target.find_first_of('?') + 1);
-    request.URI = request.scheme + ":" + request.net_path;
-    if (request.query.length())
-        request.URI += "?" + request.query;
-    request.original_target = request.target;
+    parse_URI(request);
     LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
     return (request);
@@ -267,14 +226,8 @@ const t_server &configuration)
     events = eventQueue;
     server_configuration = configuration;
     locations = configuration.locations;
-    finished_reading = false;
-    header_is_parsed = false;
-    found_content_length = false;
-    is_post = false;
-    content_length = 0;
-    chunked = false;
-    start_body_pos = 0;
-    chunks_size = 0;
+    reset_vars();
+
     for (unsigned int i = 0; i < locations.size(); ++i)
     {
         // LOG("Redirect for route " + locations[i].route + ": " + locations[i].redirect);
@@ -394,7 +347,7 @@ int server::accept_connection(void)
         TERMINATE("'fcntl' failed");
     LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
     NETWORK_LOG(displayTimestamp() << " Client joined from socket: " << new_socket);
-   return new_socket;
+    return new_socket;
 }
 
 void server::cut_connection(int socket)
@@ -424,49 +377,39 @@ void server::handle_connection(int socket)
     http_request request = parse_request_header(socket);
     if (request.too_large == true)
     {
+        cutConnection = true;
         router(socket, http_response::tooLargeResponse());
-        headerFields.clear();
         return ;
     }
     if (request.reject == false && finished_reading == false)
     {
-        WARN(__LINE__);
         return ;
     }
-    LOG("Request target: " << request.target);
+    // check if redirection or not
     std::string redirectionStr = isAllowedDirectory3(request.target);
-    LOG("isAllowedDirectory3(request.target): " << redirectionStr);
     if (redirectionStr.size()) { /* redirect client to reformatted target */
         request.redirected = true;
         request.target = redirectionStr;
     } else {
         request.redirected = false;
     }
+    /* httpRequest is only for logging */
     std::string httpRequest;
-    PRINT_HERE();
     for (std::vector<std::string>::iterator it = headerFields.begin(); it != headerFields.end(); ++it)
-        httpRequest += *it;
-    PRINT_HERE();
+        httpRequest += *it + "\n";
+    httpRequest += "\n";
     httpRequest += request_body;
     HTTP_MESSAGE_LOG("\n\n\n\nLog ID: " << http_message_log_id++ << "\n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
         << std::endl << displayTimestamp() << " [REQUEST from socket - " << socket << "]" << std::endl
         << httpRequest << std::endl
         << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-    PRINT_HERE();
     if (is_post == true && found_content_length == false && chunked == false)
     {
         http_response response = http_response::reject_http_response();
+        cutConnection = true;
         router(socket, response);
-        cut_connection(socket);
-        headerFields.clear();
         return ;
     }
-    PRINT_HERE();
-    finished_reading = false; 
-    header_is_parsed = false;
-    chunked = false;
-    is_post = false;
-    request_body.clear();
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
@@ -476,26 +419,25 @@ void server::handle_connection(int socket)
     request.hostname = buffer;
     request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
 
-    PRINT_HERE();
     http_response response = format_http_response(request);
-    PRINT_HERE();
-    headerFields.clear();
-    LOG("response.handled_by_cgi: " << response.handled_by_cgi);
     if (response.handled_by_cgi == false)
+    {
+        if (response.reject == true)
+            cutConnection = true;
         router(socket, response);
-    // if (request.reject == true)
-    //     cut_connection(socket);
+    }
 }
 
 bool    server::check_first_line(std::string current_line, http_request &request)
 {
-    LOG("current line: " << current_line);
     if (match(current_line, HEADER_REQUEST_LINE_PATTERN) == false)
     {
         return (false); /* 400 bad request (syntax error) RFC7230/3.5. last paragraph */
     }
     request.scheme = "http";
     std::vector<std::string> words = conf_file::get_words(current_line);
+    if (words.size() < 3)
+        return (false);
     request.method_token = words[0];
     request.target = words[1];
     request.protocol_version = words[2];
@@ -509,38 +451,27 @@ bool    server::check_first_line(std::string current_line, http_request &request
 
 bool            server::check_prebody(std::string current_line,  http_request &request)
 {
-    bool    first_header_field = 1;
-
-    // std::cout << "header field: " << current_line;
-    if (first_header_field == true) { /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
-        if (header_whitespace_characters.count(current_line[0]))
-        {
-            return (false); /* 400 bad request (syntax error) */
-        }
-        first_header_field = false;
+    /* RFC7230/3. A sender MUST NOT send whitespace between the start-line and the first header field */
+    if (header_whitespace_characters.count(current_line[0]))
+    {
+        return (false); /* 400 bad request (syntax error) */
     }
     if (match(current_line, HEADER_FIELD_PATTERN) == false)
     {
-        // LOG("ASCII");
-        // for (size_t i = 0; i < current_line.size(); ++i)
-        //     printf("[%d] ", current_line[i]);
-        // LOG("current_line: " << current_line);
-        PRINT_HERE();
-        WARN("PRINT_HERE();");
         return (false); /* 400 bad request (syntax error) */
     }
+    // check if 'Host' header field already exists
     std::string field_name = current_line.substr(0, current_line.find_first_of(':'));
     if (field_name == "Host" && request.header_fields.count(field_name))
     {
         return (false); /* RFC7230/5.4. */
     }
     std::string field_value_untruncated = current_line.substr(field_name.size() + 1);
-    // LOG("field_value_untruncated: " << field_value_untruncated);
     std::string field_value = field_value_untruncated.substr(field_value_untruncated.find_first_not_of(HEADER_WHITESPACES), field_value_untruncated.find_last_not_of(HEADER_WHITESPACES + CRLF));
     if (request.header_fields.count(field_name)) /* append field-name with a preceding comma */
         request.header_fields[field_name] += "," + field_value;
     else
-        request.header_fields[field_name] = field_value; 
+        request.header_fields[field_name] = field_value;
     return true;
 }
 
@@ -591,18 +522,10 @@ std::string server::isAllowedDirectory(const std::string &target)
         {
             /* construct string */
             std::string path = cit->second.root + "/";
-            // LOG("path: " << path);
-            // LOG("cit->first: " << cit->first);
             path += target.substr((target[cit->first.size() - 1] == '/' ? cit->first.size() + 1 : cit->first.size()));
-            // path += target.substr(cit->first.size());
-            // /directory
-            // LOG("path: " << path);
             /* remove route from the beginning of 'target'
              * add root to the beginning of target
             */
-
-            // if (target == cit->second.route.substr(0, cit->second.route.find_last_of("/")))
-            //     return (path);
             int ret = fileExists(path);
             if (ret == 2) /* if its a directory */
             {
@@ -638,17 +561,10 @@ std::string server::isAllowedDirectory2(const std::string &target)
 {
     for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
     {
-        // cit->second.root == views
-        // cit->first == /error
-        // target == /error/lol/asd.txt
-        // path = views/lol/asd.txt
-        LOG("target: " << target);
-        LOG("cit->first: " << cit->first);
         if (cit->first == "")
             return ("");
         if (target.substr(0, cit->first.size()) == cit->first)
         {
-            PRINT_HERE();
             std::string path = cit->second.root;
             if (path.empty() == true)
                 path = cit->second.index;
@@ -668,10 +584,6 @@ std::string server::isAllowedDirectory3(const std::string &target)
 {
     for (std::map<std::string, t_location>::const_reverse_iterator cit = sortedRoutes.rbegin(); cit != sortedRoutes.rend(); ++cit)
     {
-        // cit->second.redirect == /location2
-        // cit->first == /error
-        // target == /error/lol/asd.txt
-        // path = location2/lol/asd.txt
         if (cit->first == "")
             return ("");
         if (target.substr(0, cit->first.size()) == cit->first)
@@ -750,18 +662,15 @@ http_response server::format_http_response(http_request& request)
         request.extension = server_configuration.general_cgi_path;
         if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
         {
-            PRINT_HERE();
             return (handle_post_request(request));
         }
     }
 
-    WARN("request.reject: " << request.reject);
     if (request.reject == true) { /* Bad Request */
         response.status_code = "400";
         response.reason_phrase = "Bad Request";
         response.header_fields["Connection"] = "close";
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
-        PRINT_HERE();
         if (request.method_token == "POST" || request.method_token == "PUT")
             return (handle_post_request(request));
         std::string constructedPath(isAllowedDirectory(request.target));
@@ -782,13 +691,12 @@ http_response server::format_http_response(http_request& request)
             if ((fd = open(constructedPath.c_str(), O_RDONLY)) == -1)
                 return (http_response::reject_http_response());
             char *curLine;
-            PRINT_HERE();
+            // problem if curLine is too large
             while ((curLine = get_next_line(fd)))
             {
                 response.payload += std::string(curLine) + "\n";
                 free(curLine);
             }
-            PRINT_HERE();
             cached_resources[request.target].content = response.payload;
             cached_resources[request.target].target = request.target;
             close(fd);
@@ -1069,7 +977,16 @@ void server::router(int socket, const http_response &response)
     // LOG(message);
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
-    send(socket, message.c_str(), message.length(), 0);
+    /* reset everything in server object */
+    reset_vars();
+    // if message too big this might be a problem so we need to iterate and send message back by parts
+    size_t send_ret = send(socket, message.c_str(), message.length(), 0);
+    WARN("These two should be the same:");
+    WARN("send ret: " << send_ret << ", message.length(): " << message.length());
+    // idk if needed
+    usleep(10000);
+    if (cutConnection == true)
+        cut_connection(socket);
 }
 
 void server::send_timeout(int socket)
@@ -1080,6 +997,7 @@ void server::send_timeout(int socket)
     response.reason_phrase = "Request Timeout";
     response.header_fields["Connection"] = "close";
     response.payload = cached_resources["/error"].content;
+    cutConnection = true;
     router(socket, response);
 }
 
@@ -1195,9 +1113,8 @@ http_response server::handle_post_request(http_request &request)
     if (pos != std::string::npos)
         extension = request.target.substr(pos);
     request.extension = server_configuration.general_cgi_path;
-    request.underLocation.clear();
+    // 'underLocation' is substituted request target
     request.underLocation = isAllowedDirectory2(request.target);
-    LOG("request.underLocation: " << request.underLocation);
     if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
     {   /*
          * if general_cgi_extension exists in config file and the request resource matches this extension
@@ -1267,7 +1184,6 @@ http_response server::handle_post_request(http_request &request)
             if (*it == "PUT" && request.method_token == "PUT")
             { /* check if files exists -> if so update it */
                 std::ofstream uploaded_file(request.underLocation);
-                LOG("request.underLocation: " << request.underLocation);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + request.underLocation);
                 // LOG(request.payload);
@@ -1293,9 +1209,6 @@ http_response server::handle_post_request(http_request &request)
             else if (*it == "POST" && request.method_token == "POST")
             { /* creates and overwrites resource */
                 std::ofstream uploaded_file(request.underLocation);
-                PRINT_HERE();
-                WARN("request.underLocation: " << request.underLocation);
-                LOG("uploaded_file: " << uploaded_file);
                 if (!uploaded_file)
                     WARN("Failed to create file: " + request.underLocation);
                 uploaded_file << request.payload;
@@ -1357,9 +1270,6 @@ std::pair<std::string, bool>     server::decoding_chunked(const std::string &chu
         {
             return (std::pair<std::string, bool>(unchunked, false));
         }
-        WARN("hexdec_size ASCII:");
-        for (unsigned int i = 0; i < hexdec_size.size(); ++i)
-            printf("[%d] ", hexdec_size[i]);
         // transform chunk-size from hexdezimal to decimal
         if (hexdec_size.empty() == true)
             break ;
@@ -1390,4 +1300,34 @@ std::pair<std::string, bool>     server::decoding_chunked(const std::string &chu
         hexdec_size.clear();
     }
     return (std::pair<std::string, bool>(unchunked, true));
+}
+
+void server::reset_vars(void)
+{
+    chunks_size = 0;
+    main_vec.clear();
+    request_body.clear();
+    nOfBytesRead = 0;
+    readRequestPosition = 0;
+    content_length = 0;
+    is_post = false;
+    chunked = false;
+    header_is_parsed = false;
+    finished_reading = false;
+    found_content_length = false;
+    headerFields.clear();
+    current_header_field.clear();
+    cutConnection = false;
+}
+
+void server::parse_URI(http_request &request)
+{
+    request.abs_path = request.target.substr(0, request.target.find_first_of('?'));
+    request.net_path = "//" + request.header_fields["Host"] + request.abs_path;
+    if (request.target.find_first_of('?') != std::string::npos)
+        request.query = request.target.substr(request.target.find_first_of('?') + 1);
+    request.URI = request.scheme + ":" + request.net_path;
+    if (request.query.length())
+        request.URI += "?" + request.query;
+    request.original_target = request.target;
 }

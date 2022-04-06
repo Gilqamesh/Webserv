@@ -64,7 +64,6 @@ void Network::runNetwork()
                         int readRet = read(cgi_out, buffer, 4095);
                         if (readRet == -1)
                         {
-                            PRINT_HERE();
                             WARN("read failed");
                             break ;
                         }
@@ -81,7 +80,6 @@ void Network::runNetwork()
                     usleep(10000);
                     servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
                 }
-                PRINT_HERE();
                 /* remove client socket from 'sockets' */
                 sockets.erase(cgi_responses[*(int *)events[i].udata]);
                 /*  */
@@ -104,7 +102,6 @@ void Network::runNetwork()
             {
                 if (events[i].flags & EV_EOF) /* client side shutdown */
                 {
-                    PRINT_HERE();
                     servers[sockets[fd]].cut_connection(fd);
                     sockets.erase(fd);
                     continue ;
@@ -116,7 +113,6 @@ void Network::runNetwork()
             }
             else if (events[i].filter == EVFILT_TIMER)  /* socket is expired */
             {
-                PRINT_HERE();
 				servers[sockets[fd]].send_timeout(fd); /* 408 Request Timeout */
                 servers[sockets[fd]].cut_connection(fd);
                 sockets.erase(fd);
