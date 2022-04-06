@@ -23,6 +23,7 @@ struct HttpObject
     std::vector<char>           *main_vec;
     long long                   chunks_size;
     std::string                 current_header_field;
+    // http_response               *response;
 };
 
 #endif

@@ -80,19 +80,22 @@ void    server::get_body(int socket)
         *currentHttpObjects[socket]->request_body += (*currentHttpObjects[socket]->main_vec)[currentHttpObjects[socket]->readRequestPosition];
 }
 
-http_request server::parse_request_header(int socket)
+http_request *server::parse_request_header(int socket)
 {
     read_request(socket); // read and append to main_vec
     if (currentHttpObjects[socket]->header_is_parsed == false)
     {
         get_header_fields(socket);
         if (currentHttpObjects[socket]->header_is_parsed == false) {
+            // chunked_http_request
             return (http_request::chunked_http_request());
         }
         if (get_header_infos(socket) == false) {
+            // payload_too_large
             return (http_request::payload_too_large());
         }
         if (currentHttpObjects[socket]->is_post == true && currentHttpObjects[socket]->chunked == false && currentHttpObjects[socket]->found_content_length == false) {
+            // reject_http_request
             return (http_request::reject_http_request());
         }
     }
@@ -131,23 +134,25 @@ http_request server::parse_request_header(int socket)
         }
     }
 
-    http_request request;
-    request.socket = socket;
+    http_request *request = new http_request();
+    request->socket = socket;
     if (currentHttpObjects[socket]->chunked == true)
     {
         std::pair<std::string *, bool> retDec = decoding_chunked(*currentHttpObjects[socket]->request_body, socket);
         WARN("chunks_size: " << currentHttpObjects[socket]->chunks_size);
-        request.payload = retDec.first;
-        request.chunked = true;
+        request->payload = retDec.first;
+        request->chunked = true;
         if (retDec.second == false)
         {
             WARN("chunked request had syntax error");
+            delete request;
             return (http_request::reject_http_request());
         }
         // check if payload of request is too big
         std::vector<std::string> words = conf_file::get_words(currentHttpObjects[socket]->headerFields[0]);
         if (words.size() < 2)
         {
+            delete request;
             return (http_request::reject_http_request());
         }
         std::string target(words[1]);
@@ -158,6 +163,7 @@ http_request server::parse_request_header(int socket)
                 if (cit->second.client_max_body_size != -1
                     && currentHttpObjects[socket]->chunks_size > cit->second.client_max_body_size)
                 {
+                    delete request;
                     return (http_request::payload_too_large());
                 }
                 break ;
@@ -166,35 +172,38 @@ http_request server::parse_request_header(int socket)
         if (server_configuration.client_max_body_size != -1
             && currentHttpObjects[socket]->chunks_size > server_configuration.client_max_body_size)
         {
+            delete request;
             return (http_request::payload_too_large());
         }
     }
     else
     {
-        request.payload = currentHttpObjects[socket]->request_body;
+        request->payload = currentHttpObjects[socket]->request_body;
     }
 
-    if (check_first_line(currentHttpObjects[socket]->headerFields[0], request) == false)
+    if (check_first_line(currentHttpObjects[socket]->headerFields[0], *request) == false)
     {
+        delete request;
         return (http_request::reject_http_request());
     }
 
     for (size_t i = 1; i < currentHttpObjects[socket]->headerFields.size(); ++i)
     {
-        if (check_prebody(currentHttpObjects[socket]->headerFields[i], request) == false)
+        if (check_prebody(currentHttpObjects[socket]->headerFields[i], *request) == false)
         {
+            delete request;
             return (http_request::reject_http_request());
         }
     }
 
-    if (request.header_fields.count("Host") == 0)
+    if (request->header_fields.count("Host") == 0)
     {
+        delete request;
         return (http_request::reject_http_request());
     }
-    parse_URI(request);
-    LOG(displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
-    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST  -> [method: " << request.method_token << "] [target: " << request.target << "] [version: " << request.protocol_version << "]");
-    PRINT_HERE();
+    parse_URI(*request);
+    LOG(displayTimestamp() << " REQUEST  -> [method: " << request->method_token << "] [target: " << request->target << "] [version: " << request->protocol_version << "]");
+    NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " REQUEST -> [method: " << request->method_token << "] [target: " << request->target << "] [version: " << request->protocol_version << "]");
     return (request);
 }
 
@@ -374,30 +383,27 @@ void server::handle_connection(int socket)
     {
         currentHttpObjects[socket] = new HttpObject();
     }
-    PRINT_HERE();
-    http_request request = parse_request_header(socket);
-    PRINT_HERE();
-    if (request.too_large == true)
+    http_request *request = parse_request_header(socket);
+    if (request->too_large == true)
     {
         currentHttpObjects[socket]->cutConnection = true;
         router(socket, http_response::tooLargeResponse());
+        delete request;
         return ;
     }
-    PRINT_HERE();
-    if (request.reject == false && currentHttpObjects[socket]->finished_reading == false)
+    if (request->reject == false && currentHttpObjects[socket]->finished_reading == false)
     {
+        delete request;
         return ;
     }
-    PRINT_HERE();
     // check if redirection or not
-    std::string redirectionStr = isAllowedDirectory3(request.target);
+    std::string redirectionStr = isAllowedDirectory3(request->target);
     if (redirectionStr.size()) { /* redirect client to reformatted target */
-        request.redirected = true;
-        request.target = redirectionStr;
+        request->redirected = true;
+        request->target = redirectionStr;
     } else {
-        request.redirected = false;
+        request->redirected = false;
     }
-    PRINT_HERE();
     /* httpRequest is only for logging */
     if (currentHttpObjects[socket]->request_body->size() < 10000)
     {
@@ -411,34 +417,37 @@ void server::handle_connection(int socket)
             << httpRequest << std::endl
             << "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
     }
-    PRINT_HERE();
     if (currentHttpObjects[socket]->is_post == true && currentHttpObjects[socket]->found_content_length == false && currentHttpObjects[socket]->chunked == false)
     {
         http_response response = http_response::reject_http_response();
         currentHttpObjects[socket]->cutConnection = true;
         router(socket, response);
+        delete request;
         return ;
     }
-    PRINT_HERE();
     struct sockaddr addr;
     socklen_t socklen;
     /* Retrieving client information */
     char buffer[100];
     getsockname(socket, &addr, &socklen);
     inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, buffer, INET_ADDRSTRLEN);
-    request.hostname = buffer;
-    request.port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
-    PRINT_HERE();
+    request->hostname = buffer;
+    request->port = std::to_string(ntohs(((struct sockaddr_in *)&addr)->sin_port));
 
-    http_response response = format_http_response(request);
-    PRINT_HERE();
+    http_response response = format_http_response(*request);
     if (response.handled_by_cgi == false)
     {
         if (response.reject == true)
             currentHttpObjects[socket]->cutConnection = true;
         router(socket, response);
     }
-    PRINT_HERE();
+    else
+    {
+        assert(currentHttpObjects[socket]);
+        delete currentHttpObjects[socket];
+        currentHttpObjects.erase(socket);
+    }
+    delete request;
 }
 
 bool    server::check_first_line(std::string current_line, http_request &request)
@@ -811,6 +820,9 @@ http_response server::format_http_response(http_request& request)
         /* write request payload into socket */
         (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
         CGI script(cgi_pipe, &request);
+        script.out_file_name = "temp/temp_cgi_file_out" + std::to_string(cgi_pipe[READ_END]);
+        assert(cgi_outfiles.count(cgi_pipe[READ_END]) == 0);
+        cgi_outfiles[cgi_pipe[READ_END]] = script.out_file_name;
         add_script_meta_variables(script, request);
         script.execute();
         close(cgi_pipe[WRITE_END]);
@@ -995,15 +1007,13 @@ void server::router(int socket, const http_response &response)
     WARN("These two should be the same:");
     WARN("send ret: " << send_ret << ", message.length(): " << message.length());
     // idk if needed
-    usleep(10000);
+    usleep(1000);
     assert(currentHttpObjects[socket]);
     if (currentHttpObjects[socket]->cutConnection == true)
     {
         cut_connection(socket);
     }
-    PRINT_HERE();
     delete currentHttpObjects[socket];
-    PRINT_HERE();
     currentHttpObjects.erase(socket);
 }
 
@@ -1148,6 +1158,9 @@ http_response server::handle_post_request(http_request &request)
         /* write request payload into socket */
         (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
         CGI script(cgi_pipe, &request);
+        script.out_file_name = "temp/temp_cgi_file_out" + std::to_string(cgi_pipe[READ_END]);
+        assert(cgi_outfiles.count(cgi_pipe[READ_END]) == 0);
+        cgi_outfiles[cgi_pipe[READ_END]] = script.out_file_name;
         add_script_meta_variables(script, request);
         script.execute();
         close(cgi_pipe[WRITE_END]);
@@ -1186,6 +1199,9 @@ http_response server::handle_post_request(http_request &request)
             /* write request payload into socket */
             (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
             CGI script(cgi_pipe, &request);
+            script.out_file_name = "temp/temp_cgi_file_out" + std::to_string(cgi_pipe[READ_END]);
+            assert(cgi_outfiles.count(cgi_pipe[READ_END]) == 0);
+            cgi_outfiles[cgi_pipe[READ_END]] = script.out_file_name;
             add_script_meta_variables(script, request);
             script.execute();
             close(cgi_pipe[WRITE_END]);

@@ -85,11 +85,11 @@ void CGI::execute(void)
         cgiResponse += "Connection: close\n";
         cgiResponse += "\n";
         /*
-         * store the output of the cgi to temp/temp_cgi_file_out as well
+         * store the output of the cgi to out_file_name as well
          */
-        int cgiNetworkTempFile = open("temp/temp_cgi_file_out", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        int cgiNetworkTempFile = open(out_file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0777);
         if (cgiNetworkTempFile == -1)
-            TERMINATE("failed to open for writing: temp/temp_cgi_file_out");
+            TERMINATE(("failed to open for writing: " + out_file_name).c_str());
         // WARN("request->underLocation: " << request->underLocation);
         int requestUpload = open(request->underLocation.c_str(), O_RDONLY);
         if (requestUpload == -1)

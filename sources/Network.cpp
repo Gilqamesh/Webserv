@@ -37,57 +37,98 @@ void Network::runNetwork()
             int fd = events[i].ident;
             if (events[i].udata != NULL) /* CGI fd */
             {
-                assert(cgi_responses.count(*(int *)events[i].udata) != 0);
-                if (sockets.count(cgi_responses[*(int *)events[i].udata])) /* if we still have connection with the client send the response */
+                int cgi_fd = *(int *)events[i].udata;
+                assert(cgi_responses.count(cgi_fd) != 0);
+                if (sockets.count(cgi_responses[cgi_fd])) /* if we still have connection with the client send the response */
                 {
-                    // char *curLine;
-                    // while ((curLine = get_next_line(*(int *)events[i].udata)))
-                    // {
-                    //     response += std::string(curLine);
-                    //     free(curLine);
-                    // }
-                    // WARN("response:");
-                    // WARN(response);
-                    // send(cgi_responses[*(int *)events[i].udata], response.data(), response.length(), 0);
-                    // LOG("CGI Response:\n" << response);
-                    int cgi_out = open("temp/temp_cgi_file_out", O_RDONLY);
-                    if (cgi_out == -1)
-                        WARN("open failed for reading: temp/temp_cgi_file_out");
-                    struct stat fileInfo;
-                    if (stat("temp/temp_cgi_file_out", &fileInfo) == -1)
-                        TERMINATE("stat failed on file: temp/temp_cgi_file_out");
-                    WARN("stat(temp/temp_cgi_file_out): " << fileInfo.st_size);
-                    char buffer[4096];
-                    int accumulatedValue = 0;
-                    while (1)
+                    std::map<int, std::string> *cgi_out_files = &servers[sockets[cgi_responses[cgi_fd]]].cgi_outfiles;
+                    assert(cgi_out_files->count(cgi_fd) != 0);
+                    int cgi_out;
+                    if (fileIsOpen.count(cgi_fd) == 0)
                     {
-                        int readRet = read(cgi_out, buffer, 4095);
-                        if (readRet == -1)
-                        {
-                            WARN("read failed");
-                            break ;
-                        }
-                        if (readRet == 0)
-                            break ;
-                        accumulatedValue += send(cgi_responses[*(int *)events[i].udata], buffer, readRet, 0);
-                        usleep(1000);
-                        buffer[readRet] = '\0';
+                        accumulatedValues[cgi_fd] = 0;
+                        cgi_out = open((*cgi_out_files)[cgi_fd].c_str(), O_RDONLY);
+                        if (cgi_out == -1)
+                            WARN("open failed for reading: " << (*cgi_out_files)[cgi_fd]);
+                        fileIsOpen[cgi_fd] = cgi_out;
                     }
-                    WARN(accumulatedValue);
+                    else
+                    {
+                        cgi_out = fileIsOpen[cgi_fd];
+                    }
+                    // struct stat fileInfo;
+                    // if (stat((*cgi_out_files)[cgi_fd].c_str(), &fileInfo) == -1)
+                    //     TERMINATE(("stat failed on file: " + (*cgi_out_files)[cgi_fd]).c_str());
+                    // WARN("stat(" << (*cgi_out_files)[cgi_fd] << fileInfo.st_size);
+                    char buffer[16384];
+                    int readRet = read(cgi_out, buffer, 16384);
+
+                    accumulatedValues[cgi_fd] += send(cgi_responses[cgi_fd], buffer, readRet, 0);
+                    if (readRet == -1)
+                        WARN("read failed");
+                    if (readRet == 0)
+                    {
+                        WARN("accumulatedValues.erase(cgi_fd): " << accumulatedValues[cgi_fd]);
+                        accumulatedValues.erase(cgi_fd);
+                        fileIsOpen.erase(cgi_fd);
+                        close(cgi_out);
+                        cgi_out_files->erase(cgi_fd);
+                        /* cut connection with the client */
+                        servers[sockets[cgi_responses[cgi_fd]]].cut_connection(cgi_responses[cgi_fd]);
+                        /* remove client socket from 'sockets' */
+                        sockets.erase(cgi_responses[cgi_fd]);
+                        cgi_responses.erase(cgi_fd);
+                        if (fileIsOpen.count(cgi_fd))
+                            fileIsOpen.erase(cgi_fd);
+                        if (accumulatedValues.count(cgi_fd))
+                            accumulatedValues.erase(cgi_fd);
+                        close(cgi_fd);
+                        free(events[i].udata);
+                        events[i].udata = NULL;
+                        continue ;
+                    }
+                    // else
+                    // {
+                    //     events.addReadEvent(cgi_fd, (int *)events[i].udata);
+                    // }
+
+                    // int accumulatedValue = 0;
+                    // while (1)
+                    // {
+                    //     int readRet = read(cgi_out, buffer, 16384);
+                    //     if (readRet == -1)
+                    //     {
+                    //         WARN("read failed");
+                    //         break ;
+                    //     }
+                    //     if (readRet == 0)
+                    //         break ;
+                    //     accumulatedValue += send(cgi_responses[cgi_fd], buffer, readRet, 0);
+                    //     usleep(10000);
+                    //     buffer[readRet] = '\0';
+                    // }
+                    // WARN("accumulatedValue: " << accumulatedValue);
                     // WARN("response: " << response);
-                    close(cgi_out);
-                    /* cut connection with the client */
-                    usleep(10000);
-                    servers[sockets[cgi_responses[*(int *)events[i].udata]]].cut_connection(cgi_responses[*(int *)events[i].udata]);
+                    // close(cgi_out);
+                    // cgi_out_files->erase(cgi_fd);
+                    // /* cut connection with the client */
+                    // usleep(10000);
+                    // servers[sockets[cgi_responses[cgi_fd]]].cut_connection(cgi_responses[cgi_fd]);
                 }
-                /* remove client socket from 'sockets' */
-                sockets.erase(cgi_responses[*(int *)events[i].udata]);
-                /*  */
-                cgi_responses.erase(*(int *)events[i].udata);
-                close(*(int *)events[i].udata);
-                free(events[i].udata);
-                events[i].udata = NULL;
-                continue ;
+                else
+                {
+                    /* remove client socket from 'sockets' */
+                    sockets.erase(cgi_responses[cgi_fd]);
+                    cgi_responses.erase(cgi_fd);
+                    if (fileIsOpen.count(cgi_fd))
+                        fileIsOpen.erase(cgi_fd);
+                    if (accumulatedValues.count(cgi_fd))
+                        accumulatedValues.erase(cgi_fd);
+                    close(cgi_fd);
+                    free(events[i].udata);
+                    events[i].udata = NULL;
+                    continue ;
+                }
             }
             if (servers.count(fd)) /* if 'fd' is a server socket -> accept connection */
             {

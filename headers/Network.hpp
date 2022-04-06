@@ -8,7 +8,7 @@
 # include <map>
 # include "conf_file.hpp"
 
-# define BACKLOG    100
+# define BACKLOG    200
 
 class server;
 
@@ -27,6 +27,9 @@ class Network
 		std::map<int, server>		servers; // server_socket_fd - server
 		std::map<int, int>			sockets; // socket - server_socket_fd
 		std::map<int, int>			cgi_responses; /* cgi socket -> client socket */
+        std::map<int, int>          fileIsOpen; /* socket - file fd */
+        // debug
+        std::map<int, int>          accumulatedValues;
 
 		Network(Network const &Network);
 		Network &operator=(Network const &Network);

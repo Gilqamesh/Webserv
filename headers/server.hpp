@@ -52,6 +52,7 @@ private:
      */
     std::map<int, HttpObject *>         currentHttpObjects;
 public:
+    std::map<int, std::string>          cgi_outfiles; /* cgi socket - filename */
 
     void            read_request(int fd);
     void            get_header_fields(int socket);
@@ -71,7 +72,7 @@ public:
     void            send_timeout(int socket); /* Send response: 408 Request Timeout */
 
 private:
-    http_request    parse_request_header(int socket);
+    http_request    *parse_request_header(int socket);
     void            router(int socket, const http_response &response);
 
     /* format http request and its control functions */

@@ -10,6 +10,7 @@ class CGI /* goal: cgi 1.1 complient */
 public:
     CGI(int pipe[2], http_request *httpRequest);
     ~CGI();
+    std::string  out_file_name;
 
     void add_meta_variable(const std::string &key, const std::string &value);
     void execute(void); /* executes the script with the configured meta_variables */
