@@ -51,22 +51,23 @@ void Network::runNetwork()
                         if (cgi_out == -1)
                             WARN("open failed for reading: " << (*cgi_out_files)[cgi_fd]);
                         fileIsOpen[cgi_fd] = cgi_out;
+                        struct stat fileInfo;
+                        if (stat((*cgi_out_files)[cgi_fd].c_str(), &fileInfo) == -1)
+                            TERMINATE(("stat failed on file: " + (*cgi_out_files)[cgi_fd]).c_str());
+                        fileSizes[cgi_fd] = fileInfo.st_size;
                     }
                     else
                     {
                         cgi_out = fileIsOpen[cgi_fd];
                     }
-                    // struct stat fileInfo;
-                    // if (stat((*cgi_out_files)[cgi_fd].c_str(), &fileInfo) == -1)
-                    //     TERMINATE(("stat failed on file: " + (*cgi_out_files)[cgi_fd]).c_str());
-                    // WARN("stat(" << (*cgi_out_files)[cgi_fd] << fileInfo.st_size);
-                    char buffer[16384];
-                    int readRet = read(cgi_out, buffer, 16384);
+                    char buffer[4096];
+                    int readRet = read(cgi_out, buffer, 4096);
 
                     accumulatedValues[cgi_fd] += send(cgi_responses[cgi_fd], buffer, readRet, 0);
+                    WARN("accumulatedValues[cgi_fd]: " << accumulatedValues[cgi_fd]);
                     if (readRet == -1)
                         WARN("read failed");
-                    if (readRet == 0)
+                    if (accumulatedValues[cgi_fd] == fileSizes[cgi_fd])
                     {
                         WARN("accumulatedValues.erase(cgi_fd): " << accumulatedValues[cgi_fd]);
                         accumulatedValues.erase(cgi_fd);
@@ -85,8 +86,10 @@ void Network::runNetwork()
                         close(cgi_fd);
                         free(events[i].udata);
                         events[i].udata = NULL;
+                        fileSizes.erase(cgi_fd);
                         continue ;
                     }
+                    continue ;
                     // else
                     // {
                     //     events.addReadEvent(cgi_fd, (int *)events[i].udata);
@@ -124,6 +127,7 @@ void Network::runNetwork()
                         fileIsOpen.erase(cgi_fd);
                     if (accumulatedValues.count(cgi_fd))
                         accumulatedValues.erase(cgi_fd);
+                    fileSizes.erase(cgi_fd);
                     close(cgi_fd);
                     free(events[i].udata);
                     events[i].udata = NULL;
