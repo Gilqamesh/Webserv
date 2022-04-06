@@ -14,6 +14,7 @@ void    server::read_request(int fd)
 
 void    server::get_header_fields(void)
 {
+    headerFields.clear();
     std::string tmp;
     WARN("main_vec first 100 char:");
     for (unsigned int i = 0; i < 100; ++i)
