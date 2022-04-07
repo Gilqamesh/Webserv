@@ -25,6 +25,7 @@
 # include <sys/event.h>
 # include <sys/time.h>
 
+# define NDEBUG
 # define GNL_BUFFER_SIZE 10000000
 # define LOG(x) (std::cout << x << std::endl)
 # define LOG_E(x) (std::cerr << x << std::endl)
@@ -36,7 +37,7 @@
     perror(x);              \
     exit(EXIT_FAILURE);     \
     } while (0)
-# define TIMEOUT_TO_CUT_CONNECTION 50000 /* in seconds */
+# define TIMEOUT_TO_CUT_CONNECTION 300 /* in seconds */
 # define CRLF std::string("\x0d") /* Chrome CRLF is CR */
 
 extern std::ofstream network_log;

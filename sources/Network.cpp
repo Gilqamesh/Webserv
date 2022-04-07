@@ -36,11 +36,11 @@ void Network::runNetwork()
             int fd = events[i].ident;
             if (events[i].filter == EVFILT_WRITE) /* for CGI if the socket can be read */
             {
-                int amountOfSpace = events[i].data > 4096 ? 4096 : events[i].data;
+                int amountOfSpace = events[i].data > 16384 ? 16384 : events[i].data;
                 assert(fileIsOpen.count(fd));
                 if (clientToServerSocket.count(fd)) /* if we still have connection with the client send the response */
                 {
-                    char buffer[4096];
+                    char buffer[16384];
                     int readRet = read(fileIsOpen[fd], buffer, amountOfSpace);
                     if (readRet == -1)
                         TERMINATE("send failed");
@@ -80,6 +80,7 @@ void Network::runNetwork()
                         close(fileIsOpen[fd]);
                         fileIsOpen.erase(fd);
                     }
+                    WARN("Lost connection to client");
                 }
                 continue ;
             }
@@ -103,8 +104,8 @@ void Network::runNetwork()
                             TERMINATE(("stat failed on file: " + (*cgi_out_files)[fd]).c_str());
                         fileSizes[clientSocketFd] = fileInfo.st_size;
                     }
-                    char buffer[4096];
-                    int readRet = read(fileIsOpen[clientSocketFd], buffer, 4096);
+                    char buffer[16384];
+                    int readRet = read(fileIsOpen[clientSocketFd], buffer, 16384);
 
                     WARN("accumulatedValues[fd]: " << accumulatedValues[clientSocketFd]);
                     if (readRet == -1)
@@ -129,8 +130,12 @@ void Network::runNetwork()
                         fileNames.erase(fileIsOpen[clientSocketFd]);
                         close(fileIsOpen[clientSocketFd]);
                         fileIsOpen.erase(clientSocketFd);
+                        free(events[i].udata);
+                        events[i].udata = NULL;
                         continue ;
                     }
+                    free(events[i].udata);
+                    events[i].udata = NULL;
                     events.removeReadEvent(fd);
                     events.addWriteEvent(clientSocketFd);
                     continue ;
@@ -153,6 +158,9 @@ void Network::runNetwork()
                         close(fileIsOpen[clientSocketFd]);
                         fileIsOpen.erase(clientSocketFd);
                     }
+                    free(events[i].udata);
+                    events[i].udata = NULL;
+                    WARN("Lost connection to client");
                     continue ;
                 }
             }

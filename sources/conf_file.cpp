@@ -8,6 +8,14 @@ conf_file::conf_file(std::string file_name)
 	update_server_buffer();
 	update_location_buffer();
 	parse_server();
+    for (size_t i = 0; i < _servers.size(); i++)
+    {
+        for (size_t j = i + 1; j < _servers.size(); j++)
+        {
+            if (_servers[i].port == _servers[j].port)
+                error("same ports");
+        }
+    }
 }
 
 conf_file::~conf_file()

@@ -8,6 +8,7 @@ int main(int argc, char **argv, char **envp)
 {
     {
         char *tmp = getcwd(NULL, 0);
+        // free(tmp);
     }
     system("leaks a.out");
 }

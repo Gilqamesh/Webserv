@@ -51,6 +51,10 @@ bool    server::get_header_infos(int socket)
         else if ((*it).find("Content-Length") != std::string::npos)
         {
             currentHttpObjects[socket]->found_content_length = true;
+            std::vector<std::string> contentLengthHeaderField = conf_file::get_words(*it);
+            if (contentLengthHeaderField.size() < 2)
+                return (false);
+            currentHttpObjects[socket]->content_length = stoi(contentLengthHeaderField[1]);
             std::vector<std::string> words = conf_file::get_words(currentHttpObjects[socket]->headerFields[0]);
             if (words.size() < 2)
                 return (false);
@@ -268,7 +272,7 @@ const t_server &configuration)
     cache_file();
     resource error_page;
     error_page.target = "/error";
-    error_page.path = "./views/error.html";
+    error_page.path = configuration.error_page;
     if (configuration.error_page.size())
         error_page.path = configuration.error_page;
     error_page.content_type = "text/html";
@@ -614,6 +618,8 @@ std::string server::isAllowedDirectory3(const std::string &target)
                 path = path.substr(1);
             if (target.size() > cit->first.size())
                 path += target.substr(cit->first.size());
+            if (path.back() != '/')
+                path += '/';
             return (path);
         }
     }
@@ -738,6 +744,8 @@ http_response server::format_http_response(http_request& request)
         response.reason_phrase = "Not Implemented";
         response.header_fields["Connection"] = "close";
     } else { /* OK/Redirect */
+        if (request.method_token == "DELETE")
+            return (handle_delete_request(request));
         if (request.redirected == false) {
             response.status_code = "200";
             response.reason_phrase = "OK";
@@ -911,19 +919,16 @@ void server::representation_metadata(http_request &request)
 }
 
 /* Payload Semantics RFC7231/3.3.
-* 1. Content-Length
-*   'Transfer-Encoding' header field must be known at this point
-* 2. Content-Range: NOT IMPLEMENTED
-* 3. Trailer: NOT IMPLEMENTED
-*/
+ * 1. Content-Length
+ *   'Transfer-Encoding' header field must be known at this point
+ * 2. Content-Range: NOT IMPLEMENTED
+ * 3. Trailer: NOT IMPLEMENTED
+ */
 void server::payload_header_fields(const http_request &request, http_response &response)
 {
     if (match(response.status_code, "[45]..") == true)
     {
-        if (response.status_code == "403")
-            response.header_fields["Content-Length"] = std::to_string(cached_resources["/error403"].content.length());
-        else
-            response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+        response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
         return ;
     }
     if (response.header_fields.count("Transfer-Encoding") == 0) /* set up Content-Length */
@@ -972,9 +977,7 @@ void server::router(int socket, const http_response &response)
     LOG(displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     NETWORK_LOG("Log ID: " << network_log_id++ << "\n" << displayTimestamp() << " RESPONSE -> [status: " << response.status_code << " - " << response.reason_phrase << "]");
     // if message too big this might be a problem so we need to iterate and send message back by parts
-    size_t send_ret = send(socket, message.c_str(), message.length(), 0);
-    WARN("These two should be the same:");
-    WARN("send ret: " << send_ret << ", message.length(): " << message.length());
+    send(socket, message.c_str(), message.length(), 0);
     // idk if needed
     usleep(1000);
     assert(currentHttpObjects[socket]);
@@ -1022,10 +1025,7 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
         TERMINATE("getcwd failed in 'add_script_meta_variables'");
     /* This should be handled from the calling server */
     script.add_meta_variable("PATH_INFO", std::string(cwd) + "/" + request.target);
-    // LOG("\nCWD");
-    // LOG("cwd            = " << cwd);
-    // LOG("request.target = " << request.target);
-    // LOG("");
+    free(cwd);
     // script.add_meta_variable("PATH_INFO", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed!!!!
     // script.add_meta_variable("PATH_TRANSLATED", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); // needs to be changed
     // script.add_meta_variable("PATH_TRANSLATED", cached_resources[request.target].path);
@@ -1048,11 +1048,6 @@ void server::add_script_meta_variables(CGI &script, http_request &request)
     // script.add_meta_variable("REQUEST_URI", "/Users/jludt/Desktop/Ecole42/Webserv/YoupiBanane/youpi.bla"); //needs to be changed
     // script.add_meta_variable("REQUEST_URI", std::string(cwd) + "/" + request.target);
     std::string tempHost = request.URI;
-    // LOG("ASCII");
-    // for (unsigned int i = 0; i < tempHost.size(); ++i)
-    //     printf("[%d] ", tempHost[i]);
-    // LOG("");
-    // LOG("URI: " << request.URI);
     // script.add_meta_variable("REQUEST_URI", tempHost);
     // script.add_meta_variable("REQUEST_URI", "http://localhost/yo.bla");
     /* name/version of the server, no clue what this means currently.. */
@@ -1117,7 +1112,6 @@ http_response server::handle_post_request(http_request &request)
     if (pos != std::string::npos)
         extension = request.target.substr(pos);
     request.extension = server_configuration.general_cgi_path;
-    // 'underLocation' is substituted request target
     request.underLocation = isAllowedDirectory2(request.target);
     if (server_configuration.general_cgi_extension.size() && extension == server_configuration.general_cgi_extension)
     {   /*
@@ -1127,10 +1121,6 @@ http_response server::handle_post_request(http_request &request)
         int cgi_pipe[2];
         if (pipe(cgi_pipe) == -1)
             TERMINATE("pipe failed");
-        // if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
-        //     TERMINATE("fcntl failed");
-        // if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
-        //     TERMINATE("fcntl failed");
         /* write request payload into socket */
         (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
         CGI script(cgi_pipe, &request);
@@ -1158,7 +1148,6 @@ http_response server::handle_post_request(http_request &request)
             }
         }
         assert(location.size()); /* location should exist */
-        // LOG("location: " << location);
         if (sortedRoutes[location].cgi_extension.size() && sortedRoutes[location].cgi_extension == extension)
         {
             /*
@@ -1168,10 +1157,6 @@ http_response server::handle_post_request(http_request &request)
             int cgi_pipe[2];
             if (pipe(cgi_pipe) == -1)
                 TERMINATE("pipe failed");
-            // if (fcntl(cgi_pipe[READ_END], F_SETFL, O_NONBLOCK) == -1)
-            //     TERMINATE("fcntl failed");
-            // if (fcntl(cgi_pipe[WRITE_END], F_SETFL, O_NONBLOCK) == -1)
-            //     TERMINATE("fcntl failed");
             /* write request payload into socket */
             (*cgi_responses)[cgi_pipe[READ_END]] = request.socket; /* to serve client later */
             CGI script(cgi_pipe, &request);
@@ -1190,7 +1175,6 @@ http_response server::handle_post_request(http_request &request)
         for (std::vector<std::string>::iterator it = sortedRoutes[location].methods.begin();
             it != sortedRoutes[location].methods.end(); ++it)
         {
-            LOG("*it: " << *it);
             if (*it == "PUT" && request.method_token == "PUT")
             { /* check if files exists -> if so update it */
                 std::ofstream uploaded_file(request.underLocation);
@@ -1210,6 +1194,14 @@ http_response server::handle_post_request(http_request &request)
                 response.header_fields["Content-Type"] = "text/html";
                 response.header_fields["Connection"] = "close";
                 response.header_fields["Content-Length"] = std::to_string(0);
+                cached_resources[request.target].allowed_methods.insert("GET");
+                cached_resources[request.target].allowed_methods.insert("DELETE");
+                cached_resources[request.target].allowed_methods.insert("PUT");
+                cached_resources[request.target].allowed_methods.insert("POST");
+                cached_resources[request.target].content = *request.payload;
+                cached_resources[request.target].target = request.target;
+                cached_resources[request.target].path = request.underLocation;
+                cached_resources[request.target].is_static = true;
                 return (response);
             }
             else if (*it == "POST" && request.method_token == "POST")
@@ -1231,6 +1223,14 @@ http_response server::handle_post_request(http_request &request)
                 response.header_fields["Content-Type"] = "text/html";
                 response.header_fields["Connection"] = "close";
                 response.header_fields["Content-Length"] = std::to_string(0);
+                cached_resources[request.target].allowed_methods.insert("GET");
+                cached_resources[request.target].allowed_methods.insert("DELETE");
+                cached_resources[request.target].allowed_methods.insert("PUT");
+                cached_resources[request.target].allowed_methods.insert("POST");
+                cached_resources[request.target].content = *request.payload;
+                cached_resources[request.target].target = request.target;
+                cached_resources[request.target].path = request.underLocation;
+                cached_resources[request.target].is_static = true;
                 return (response);
             }
         }
@@ -1253,7 +1253,6 @@ http_response server::handle_delete_request(http_request &request)
 {
     http_response response;
     std::string subbedTarget = isAllowedDirectory2(request.target);
-    WARN("subbedTarget: " << subbedTarget);
     if (subbedTarget.empty() == false && fileExists(subbedTarget))
     {
         if (std::remove(subbedTarget.c_str()) == 0)

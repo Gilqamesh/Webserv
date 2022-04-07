@@ -67,7 +67,7 @@ void EventHandler::removeWriteEvent(int socket)
 {
     EV_SET(&event, socket, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
     if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
-        TERMINATE("'kevent' failed in EventHandler::removeWriteEvent");
+        TERMINATE("'kevent' failed in EventHandler::removeReadEvent");
 }
 
 void EventHandler::removeTimeEvent(int socket)

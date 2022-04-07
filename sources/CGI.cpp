@@ -46,10 +46,7 @@ void CGI::execute(void)
             /*
              * Experimentation on sending the request header field to the CGI as well
              */
-            unsigned long start_timestamp = get_current_timestamp();
-            WARN(LOG_TIME(PRINT_HERE()));
             write(tmp_cgi_file_in, request->payload->data(), request->payload->length());
-            WARN(LOG_TIME(PRINT_HERE()));
             close(tmp_cgi_file_in);
             tmp_cgi_file_in = open((out_file_name + "in").c_str(), O_RDONLY);
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
