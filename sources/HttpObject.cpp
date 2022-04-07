@@ -12,11 +12,8 @@ HttpObject::HttpObject()
     readRequestPosition = 0;
     nOfBytesRead = 0;
     chunks_size = 0;
-    PRINT_HERE();
     main_vec = new std::vector<char>();
-    PRINT_HERE();
     request_body = new std::string();
-    PRINT_HERE();
 }
 
 HttpObject::~HttpObject()

@@ -29,6 +29,7 @@ class Network
 		std::map<int, int>			clientToServerSocket; // client socket - server_socket_fd
 		std::map<int, int>			cgiToClientSockets; /* cgi socket -> client socket */
         std::map<int, int>          fileIsOpen; /* client socket - file fd */
+        std::map<int, std::string>  fileNames; /* file fd - file name */
         std::map<int, size_t>       fileSizes; /* client socket - file size */
         // debug
         std::map<int, size_t>       accumulatedValues; /* client socket - sent data so far */

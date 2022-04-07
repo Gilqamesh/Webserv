@@ -110,6 +110,7 @@ private:
     std::string     isAllowedDirectory3(const std::string &target);
 
     http_response   handle_post_request(http_request &request);
+    http_response   handle_delete_request(http_request &request);
     std::pair<std::string *, bool>     decoding_chunked(const std::string &chunked, int socket);
     void            parse_URI(http_request &request);
 

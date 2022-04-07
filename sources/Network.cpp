@@ -52,16 +52,15 @@ void Network::runNetwork()
                     if (accumulatedValues[fd] == fileSizes[fd]) /* check if we are done */
                     {
                         accumulatedValues.erase(fd);
-                        close(fileIsOpen[fd]);
-                        fileIsOpen.erase(fd);
-                        clientToServerSocket.erase(fd);
                         cgiToClientSockets.erase(fd);
                         fileSizes.erase(fd);
-                        PRINT_HERE();
                         events.removeWriteEvent(fd);
-                        PRINT_HERE();
                         serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
-                        PRINT_HERE();
+                        clientToServerSocket.erase(fd);
+                        std::remove(fileNames[fileIsOpen[fd]].c_str());
+                        fileNames.erase(fileIsOpen[fd]);
+                        close(fileIsOpen[fd]);
+                        fileIsOpen.erase(fd);
                         continue ;
                     }
                     continue ;
@@ -69,20 +68,22 @@ void Network::runNetwork()
                 else /* remove all associated objects with client */
                 {
                     accumulatedValues.erase(fd);
-                    close(fileIsOpen[fd]);
-                    fileIsOpen.erase(fd);
-                    clientToServerSocket.erase(fd);
                     cgiToClientSockets.erase(fd);
                     fileSizes.erase(fd);
-                    PRINT_HERE();
                     events.removeWriteEvent(fd);
-                    PRINT_HERE();
                     serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
-                    PRINT_HERE();
+                    clientToServerSocket.erase(fd);
+                    if (fileIsOpen.count(fd))
+                    {
+                        std::remove(fileNames[fileIsOpen[fd]].c_str());
+                        fileNames.erase(fileIsOpen[fd]);
+                        close(fileIsOpen[fd]);
+                        fileIsOpen.erase(fd);
+                    }
                 }
                 continue ;
             }
-            if (events[i].udata != NULL) /* CGI fd, should only happen 1 time, the rest is handled with Write Event */
+            else if (events[i].udata != NULL) /* CGI fd, should only happen 1 time, the rest is handled with Write Event */
             {
                 assert(cgiToClientSockets.count(fd) != 0);
                 int clientSocketFd = cgiToClientSockets[fd];
@@ -94,6 +95,7 @@ void Network::runNetwork()
                     {
                         accumulatedValues[clientSocketFd] = 0;
                         fileIsOpen[clientSocketFd] = open((*cgi_out_files)[fd].c_str(), O_RDONLY);
+                        fileNames[fileIsOpen[clientSocketFd]] = (*cgi_out_files)[fd];
                         if (fileIsOpen[clientSocketFd] == -1)
                             WARN("open failed for reading: " << (*cgi_out_files)[fd]);
                         struct stat fileInfo;
@@ -115,20 +117,18 @@ void Network::runNetwork()
                     {
                         WARN("accumulatedValues.erase(fd): " << accumulatedValues[clientSocketFd]);
                         accumulatedValues.erase(clientSocketFd);
-                        close(fileIsOpen[clientSocketFd]);
-                        fileIsOpen.erase(clientSocketFd);
                         cgi_out_files->erase(fd);
                         /* cut connection with the client */
                         /* remove client socket from 'clientToServerSocket' */
-                        clientToServerSocket.erase(clientSocketFd);
                         cgiToClientSockets.erase(fd);
-                        close(fd);
                         fileSizes.erase(clientSocketFd);
-                        PRINT_HERE();
                         events.removeReadEvent(fd);
-                        PRINT_HERE();
                         serverSocketToServer[clientToServerSocket[clientSocketFd]].cut_connection(clientSocketFd);
-                        PRINT_HERE();
+                        clientToServerSocket.erase(clientSocketFd);
+                        std::remove(fileNames[fileIsOpen[clientSocketFd]].c_str());
+                        fileNames.erase(fileIsOpen[clientSocketFd]);
+                        close(fileIsOpen[clientSocketFd]);
+                        fileIsOpen.erase(clientSocketFd);
                         continue ;
                     }
                     events.removeReadEvent(fd);
@@ -138,22 +138,21 @@ void Network::runNetwork()
                 else /* if we no longer have connection with the client but there is stuff to send from cgi */
                 {
                     cgi_out_files->erase(fd);
-                    clientToServerSocket.erase(clientSocketFd);
                     cgiToClientSockets.erase(fd);
-                    if (fileIsOpen.count(fd))
-                    {
-                        close(fileIsOpen[fd]);
-                        fileIsOpen.erase(fd);
-                    }
                     if (accumulatedValues.count(fd))
                         accumulatedValues.erase(fd);
                     fileSizes.erase(fd);
                     close(fd);
-                    PRINT_HERE();
                     events.removeReadEvent(fd);
-                    PRINT_HERE();
                     serverSocketToServer[clientToServerSocket[clientSocketFd]].cut_connection(clientSocketFd);
-                    PRINT_HERE();
+                    clientToServerSocket.erase(clientSocketFd);
+                    if (fileIsOpen.count(clientSocketFd))
+                    {
+                        std::remove(fileNames[fileIsOpen[clientSocketFd]].c_str());
+                        fileNames.erase(fileIsOpen[clientSocketFd]);
+                        close(fileIsOpen[clientSocketFd]);
+                        fileIsOpen.erase(clientSocketFd);
+                    }
                     continue ;
                 }
             }
@@ -168,10 +167,8 @@ void Network::runNetwork()
             }
 			else if (events[i].filter == EVFILT_READ)   /* socket is ready to be read */
             {
-                WARN(__LINE__);
                 if (events[i].flags & EV_EOF) /* client side shutdown */
                 {
-                    WARN(__LINE__);
                     serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
                     clientToServerSocket.erase(fd);
                     continue ;

@@ -281,7 +281,6 @@ const t_server &configuration)
     error_page.is_static = true;
     /* TODO: write error page CGI script */
     // error_page.script_path = "";
-
     add_resource(error_page);
 }
 
@@ -693,6 +692,8 @@ http_response server::format_http_response(http_request& request)
     } else if (cached_resources.count(request.target) == 0) { /* Not Found */
         if (request.method_token == "POST" || request.method_token == "PUT")
             return (handle_post_request(request));
+        if (request.method_token == "DELETE")
+            return (handle_delete_request(request));
         std::string constructedPath(isAllowedDirectory(request.target));
         if (constructedPath.size()) { /* check if directory is allowed and if the file exists */
 
@@ -744,36 +745,6 @@ http_response server::format_http_response(http_request& request)
             /* Redirect: Moved permanently */
             response.status_code = "301";
             response.reason_phrase = "Moved Permanently";
-        }
-    }
-
-    if (request.method_token == "DELETE" && cached_resources[request.target].allowed_methods.count("DELETE"))
-    {      
-        if (fileExists(cached_resources[request.target].path))
-        {
-            if (std::remove(cached_resources[request.target].path.c_str()) == 0)
-            {
-                if (request.redirected == false) {
-                    response.status_code = "200";
-                    response.reason_phrase = "OK";
-                } else {
-                    /* Redirect: Moved permanently */
-                    response.status_code = "301";
-                    response.reason_phrase = "Moved Permanently";
-            }
-            }
-            else
-            {
-                response.status_code = "403";
-                response.reason_phrase = "Forbidden";
-                response.header_fields["Connection"] = "close";
-            }
-        }
-        else
-        {
-            response.status_code = "404";
-            response.reason_phrase = "Not Found";
-            response.header_fields["Connection"] = "close";
         }
     }
 
@@ -1036,6 +1007,7 @@ void server::deleteHttpObject(int socket)
 /* Add request meta-variables to the script RFC3875/4.1. */
 void server::add_script_meta_variables(CGI &script, http_request &request)
 {
+    
     request.target = isAllowedDirectory2(request.target);
     // script.add_meta_variable("AUTH_TYPE", "");
     if (request.payload->empty() == false)
@@ -1274,6 +1246,52 @@ http_response server::handle_post_request(http_request &request)
     response.header_fields["Content-Type"] = "text/html";
     response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
     response.payload = cached_resources["/error"].content;
+    return (response);
+}
+
+http_response server::handle_delete_request(http_request &request)
+{
+    http_response response;
+    std::string subbedTarget = isAllowedDirectory2(request.target);
+    WARN("subbedTarget: " << subbedTarget);
+    if (subbedTarget.empty() == false && fileExists(subbedTarget))
+    {
+        if (std::remove(subbedTarget.c_str()) == 0)
+        {
+            if (request.redirected == false) {
+                response.http_version = "HTTP/1.1";
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+                response.header_fields["Content-Type"] = "text/html";
+                response.header_fields["Content-Length"] = std::to_string(0);
+            } else {
+                /* Redirect: Moved permanently */
+                response.http_version = "HTTP/1.1";
+                response.status_code = "301";
+                response.reason_phrase = "Moved Permanently";
+                response.header_fields["Content-Type"] = "text/html";
+                response.header_fields["Content-Length"] = std::to_string(0);
+            }
+        } else {
+            response.http_version = "HTTP/1.1";
+            response.status_code = "403";
+            response.reason_phrase = "Forbidden";
+            response.header_fields["Connection"] = "close";
+            response.header_fields["Content-Type"] = "text/html";
+            response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+            response.payload = cached_resources["/error"].content;
+        }
+    }
+    else
+    {
+        response.http_version = "HTTP/1.1";
+        response.status_code = "404";
+        response.reason_phrase = "Not Found";
+        response.header_fields["Connection"] = "close";
+        response.header_fields["Content-Type"] = "text/html";
+        response.header_fields["Content-Length"] = std::to_string(cached_resources["/error"].content.length());
+        response.payload = cached_resources["/error"].content;
+    }
     return (response);
 }
 

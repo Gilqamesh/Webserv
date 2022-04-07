@@ -3,6 +3,8 @@
 #include <vector>
 #include "utils.hpp"
 #include <sys/stat.h>
+// test 
+#include <iosfwd>
 
 CGI::CGI(int pipe[2], http_request *httpRequest)
     : request(httpRequest)
@@ -38,15 +40,18 @@ void CGI::execute(void)
         {
             close(m_pipe[WRITE_END]);
             close(m_pipe[READ_END]);
-            int tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            int tmp_cgi_file_in = open((out_file_name + "in").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0777);
             if (tmp_cgi_file_in == -1)
-                TERMINATE("failed to open temp/temp_cgi_file_in");
+                TERMINATE(("failed to open " + out_file_name + "in").c_str());
             /*
              * Experimentation on sending the request header field to the CGI as well
              */
+            unsigned long start_timestamp = get_current_timestamp();
+            WARN(LOG_TIME(PRINT_HERE()));
             write(tmp_cgi_file_in, request->payload->data(), request->payload->length());
+            WARN(LOG_TIME(PRINT_HERE()));
             close(tmp_cgi_file_in);
-            tmp_cgi_file_in = open("temp/temp_cgi_file_in", O_RDONLY);
+            tmp_cgi_file_in = open((out_file_name + "in").c_str(), O_RDONLY);
             if (dup2(tmp_cgi_file_in, STDIN_FILENO) == -1)
                 TERMINATE("dup2 failed");
             close(tmp_cgi_file_in);
@@ -96,6 +101,7 @@ void CGI::execute(void)
             TERMINATE(("failed to open for reading: " + request->underLocation).c_str());
         // WARN("skipping header");
         char buffer[2];
+        // skip header
         std::string requestUploadHeader(100000, '\0');
         while (1)
         {
@@ -129,6 +135,7 @@ void CGI::execute(void)
             buffer2[readRet] = '\0';
             // WARN(buffer2);
         }
+        std::remove((out_file_name + "in").c_str());
         close(cgiNetworkTempFile);
         close(requestUpload);
         write(m_pipe[WRITE_END], "\n", 1);

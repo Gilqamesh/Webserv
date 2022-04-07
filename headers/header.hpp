@@ -13,6 +13,7 @@
 # include <sstream>
 # include <dirent.h> // opendir
 # include <regex.h> // 
+# include <cstdio>
 
 # include <poll.h>          // poll
 # include <sys/select.h>    // select
@@ -49,6 +50,5 @@ extern int http_message_log_id;
 /* for pipes */
 # define READ_END   0
 # define WRITE_END  1
-
 
 #endif
