@@ -8,8 +8,7 @@ void    server::read_request(int fd)
     std::vector<char> tmp(READ_HTTP_BUFFER_SIZE, '\0');
     currentHttpObjects[fd]->nOfBytesRead = recv(fd, tmp.data(), READ_HTTP_BUFFER_SIZE, 0);
     NETWORK_LOG("nOfBytesRead: " << currentHttpObjects[fd]->nOfBytesRead);
-    for (size_t i = 0; i < currentHttpObjects[fd]->nOfBytesRead; ++i)
-        currentHttpObjects[fd]->main_vec->push_back(tmp[i]);
+    currentHttpObjects[fd]->main_vec->insert(currentHttpObjects[fd]->main_vec->end(), tmp.begin(), tmp.begin() + currentHttpObjects[fd]->nOfBytesRead);
 }
 
 void    server::get_header_fields(int socket)
@@ -76,8 +75,8 @@ bool    server::get_header_infos(int socket)
 
 void    server::get_body(int socket)
 {
-    for (; currentHttpObjects[socket]->readRequestPosition != currentHttpObjects[socket]->main_vec->size(); ++currentHttpObjects[socket]->readRequestPosition)
-        *currentHttpObjects[socket]->request_body += (*currentHttpObjects[socket]->main_vec)[currentHttpObjects[socket]->readRequestPosition];
+    *currentHttpObjects[socket]->request_body += std::string(currentHttpObjects[socket]->main_vec->begin() + currentHttpObjects[socket]->readRequestPosition, currentHttpObjects[socket]->main_vec->end());
+    currentHttpObjects[socket]->readRequestPosition = currentHttpObjects[socket]->main_vec->size();
 }
 
 http_request *server::parse_request_header(int socket)
@@ -443,9 +442,8 @@ void server::handle_connection(int socket)
     }
     else
     {
-        assert(currentHttpObjects[socket]);
-        delete currentHttpObjects[socket];
-        currentHttpObjects.erase(socket);
+        /* delete HttpObjects that are handled by the cgi */
+        deleteHttpObject(socket);
     }
     delete request;
 }
@@ -1013,8 +1011,7 @@ void server::router(int socket, const http_response &response)
     {
         cut_connection(socket);
     }
-    delete currentHttpObjects[socket];
-    currentHttpObjects.erase(socket);
+    deleteHttpObject(socket);
 }
 
 void server::send_timeout(int socket)
@@ -1027,6 +1024,13 @@ void server::send_timeout(int socket)
     response.payload = cached_resources["/error"].content;
     currentHttpObjects[socket]->cutConnection = true;
     router(socket, response);
+}
+
+void server::deleteHttpObject(int socket)
+{
+    assert(currentHttpObjects.count(socket));
+    delete currentHttpObjects[socket];
+    currentHttpObjects.erase(socket);
 }
 
 /* Add request meta-variables to the script RFC3875/4.1. */

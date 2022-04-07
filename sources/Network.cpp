@@ -13,19 +13,18 @@ void Network::initNetwork(char *file_name)
 
     for (size_t i = 0; i < configs.size(); i++)
     {
-	    serverNetwork[i].construct(configs[i].port, BACKLOG, start_timestamp_network, &cgi_responses, &events, configs[i]);
-	    servers.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
+	    serverNetwork[i].construct(configs[i].port, BACKLOG, start_timestamp_network, &cgiToClientSockets, &events, configs[i]);
+	    serverSocketToServer.insert(std::pair<int, server>(serverNetwork[i].getServerSocketFd(), serverNetwork[i]));
     }
 }
 
 /*
-* main loop of the servers
+* main loop of the server
 * waits for new connections or handles already established connections
 */
-
 void Network::runNetwork()
 {
-	for (std::map<int, server>::iterator it = servers.begin(); it != servers.end(); ++it)
+	for (std::map<int, server>::iterator it = serverSocketToServer.begin(); it != serverSocketToServer.end(); ++it)
         events.addReadEvent(it->first);
 
     while (true)
@@ -35,132 +34,158 @@ void Network::runNetwork()
         for (int i = 0; i < nev; ++i)
         {
             int fd = events[i].ident;
-            if (events[i].udata != NULL) /* CGI fd */
+            if (events[i].filter == EVFILT_WRITE) /* for CGI if the socket can be read */
             {
-                int cgi_fd = *(int *)events[i].udata;
-                assert(cgi_responses.count(cgi_fd) != 0);
-                if (sockets.count(cgi_responses[cgi_fd])) /* if we still have connection with the client send the response */
+                int amountOfSpace = events[i].data > 4096 ? 4096 : events[i].data;
+                assert(fileIsOpen.count(fd));
+                if (clientToServerSocket.count(fd)) /* if we still have connection with the client send the response */
                 {
-                    std::map<int, std::string> *cgi_out_files = &servers[sockets[cgi_responses[cgi_fd]]].cgi_outfiles;
-                    assert(cgi_out_files->count(cgi_fd) != 0);
-                    int cgi_out;
-                    if (fileIsOpen.count(cgi_fd) == 0)
-                    {
-                        accumulatedValues[cgi_fd] = 0;
-                        cgi_out = open((*cgi_out_files)[cgi_fd].c_str(), O_RDONLY);
-                        if (cgi_out == -1)
-                            WARN("open failed for reading: " << (*cgi_out_files)[cgi_fd]);
-                        fileIsOpen[cgi_fd] = cgi_out;
-                        struct stat fileInfo;
-                        if (stat((*cgi_out_files)[cgi_fd].c_str(), &fileInfo) == -1)
-                            TERMINATE(("stat failed on file: " + (*cgi_out_files)[cgi_fd]).c_str());
-                        fileSizes[cgi_fd] = fileInfo.st_size;
-                    }
-                    else
-                    {
-                        cgi_out = fileIsOpen[cgi_fd];
-                    }
                     char buffer[4096];
-                    int readRet = read(cgi_out, buffer, 4096);
-
-                    accumulatedValues[cgi_fd] += send(cgi_responses[cgi_fd], buffer, readRet, 0);
-                    WARN("accumulatedValues[cgi_fd]: " << accumulatedValues[cgi_fd]);
+                    int readRet = read(fileIsOpen[fd], buffer, amountOfSpace);
                     if (readRet == -1)
-                        WARN("read failed");
-                    if (accumulatedValues[cgi_fd] == fileSizes[cgi_fd])
+                        TERMINATE("send failed");
+                    int sendRet = send(fd, buffer, readRet, 0);
+                    if (sendRet == -1)
+                        TERMINATE("send failed");
+                    accumulatedValues[fd] += sendRet;
+                    WARN("accumulatedValues[fd]: " << accumulatedValues[fd]);
+                    if (accumulatedValues[fd] == fileSizes[fd]) /* check if we are done */
                     {
-                        WARN("accumulatedValues.erase(cgi_fd): " << accumulatedValues[cgi_fd]);
-                        accumulatedValues.erase(cgi_fd);
-                        fileIsOpen.erase(cgi_fd);
-                        close(cgi_out);
-                        cgi_out_files->erase(cgi_fd);
-                        /* cut connection with the client */
-                        servers[sockets[cgi_responses[cgi_fd]]].cut_connection(cgi_responses[cgi_fd]);
-                        /* remove client socket from 'sockets' */
-                        sockets.erase(cgi_responses[cgi_fd]);
-                        cgi_responses.erase(cgi_fd);
-                        if (fileIsOpen.count(cgi_fd))
-                            fileIsOpen.erase(cgi_fd);
-                        if (accumulatedValues.count(cgi_fd))
-                            accumulatedValues.erase(cgi_fd);
-                        close(cgi_fd);
-                        free(events[i].udata);
-                        events[i].udata = NULL;
-                        fileSizes.erase(cgi_fd);
+                        accumulatedValues.erase(fd);
+                        close(fileIsOpen[fd]);
+                        fileIsOpen.erase(fd);
+                        clientToServerSocket.erase(fd);
+                        cgiToClientSockets.erase(fd);
+                        fileSizes.erase(fd);
+                        PRINT_HERE();
+                        events.removeWriteEvent(fd);
+                        PRINT_HERE();
+                        serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
+                        PRINT_HERE();
                         continue ;
                     }
                     continue ;
-                    // else
-                    // {
-                    //     events.addReadEvent(cgi_fd, (int *)events[i].udata);
-                    // }
-
-                    // int accumulatedValue = 0;
-                    // while (1)
-                    // {
-                    //     int readRet = read(cgi_out, buffer, 16384);
-                    //     if (readRet == -1)
-                    //     {
-                    //         WARN("read failed");
-                    //         break ;
-                    //     }
-                    //     if (readRet == 0)
-                    //         break ;
-                    //     accumulatedValue += send(cgi_responses[cgi_fd], buffer, readRet, 0);
-                    //     usleep(10000);
-                    //     buffer[readRet] = '\0';
-                    // }
-                    // WARN("accumulatedValue: " << accumulatedValue);
-                    // WARN("response: " << response);
-                    // close(cgi_out);
-                    // cgi_out_files->erase(cgi_fd);
-                    // /* cut connection with the client */
-                    // usleep(10000);
-                    // servers[sockets[cgi_responses[cgi_fd]]].cut_connection(cgi_responses[cgi_fd]);
                 }
-                else
+                else /* remove all associated objects with client */
                 {
-                    /* remove client socket from 'sockets' */
-                    sockets.erase(cgi_responses[cgi_fd]);
-                    cgi_responses.erase(cgi_fd);
-                    if (fileIsOpen.count(cgi_fd))
-                        fileIsOpen.erase(cgi_fd);
-                    if (accumulatedValues.count(cgi_fd))
-                        accumulatedValues.erase(cgi_fd);
-                    fileSizes.erase(cgi_fd);
-                    close(cgi_fd);
-                    free(events[i].udata);
-                    events[i].udata = NULL;
+                    accumulatedValues.erase(fd);
+                    close(fileIsOpen[fd]);
+                    fileIsOpen.erase(fd);
+                    clientToServerSocket.erase(fd);
+                    cgiToClientSockets.erase(fd);
+                    fileSizes.erase(fd);
+                    PRINT_HERE();
+                    events.removeWriteEvent(fd);
+                    PRINT_HERE();
+                    serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
+                    PRINT_HERE();
+                }
+                continue ;
+            }
+            if (events[i].udata != NULL) /* CGI fd, should only happen 1 time, the rest is handled with Write Event */
+            {
+                assert(cgiToClientSockets.count(fd) != 0);
+                int clientSocketFd = cgiToClientSockets[fd];
+                std::map<int, std::string> *cgi_out_files = &serverSocketToServer[clientToServerSocket[clientSocketFd]].cgi_outfiles;
+                assert(cgi_out_files->count(fd) != 0);
+                if (clientToServerSocket.count(clientSocketFd)) /* if we still have connection with the client send the response */
+                {
+                    if (fileIsOpen.count(clientSocketFd) == 0)
+                    {
+                        accumulatedValues[clientSocketFd] = 0;
+                        fileIsOpen[clientSocketFd] = open((*cgi_out_files)[fd].c_str(), O_RDONLY);
+                        if (fileIsOpen[clientSocketFd] == -1)
+                            WARN("open failed for reading: " << (*cgi_out_files)[fd]);
+                        struct stat fileInfo;
+                        if (stat((*cgi_out_files)[fd].c_str(), &fileInfo) == -1)
+                            TERMINATE(("stat failed on file: " + (*cgi_out_files)[fd]).c_str());
+                        fileSizes[clientSocketFd] = fileInfo.st_size;
+                    }
+                    char buffer[4096];
+                    int readRet = read(fileIsOpen[clientSocketFd], buffer, 4096);
+
+                    WARN("accumulatedValues[fd]: " << accumulatedValues[clientSocketFd]);
+                    if (readRet == -1)
+                        WARN("read failed");
+                    int sendRet = send(clientSocketFd, buffer, readRet, 0);
+                    if (sendRet == -1)
+                        WARN("send failed");
+                    accumulatedValues[clientSocketFd] += sendRet;
+                    if (accumulatedValues[clientSocketFd] == fileSizes[clientSocketFd])
+                    {
+                        WARN("accumulatedValues.erase(fd): " << accumulatedValues[clientSocketFd]);
+                        accumulatedValues.erase(clientSocketFd);
+                        close(fileIsOpen[clientSocketFd]);
+                        fileIsOpen.erase(clientSocketFd);
+                        cgi_out_files->erase(fd);
+                        /* cut connection with the client */
+                        /* remove client socket from 'clientToServerSocket' */
+                        clientToServerSocket.erase(clientSocketFd);
+                        cgiToClientSockets.erase(fd);
+                        close(fd);
+                        fileSizes.erase(clientSocketFd);
+                        PRINT_HERE();
+                        events.removeReadEvent(fd);
+                        PRINT_HERE();
+                        serverSocketToServer[clientToServerSocket[clientSocketFd]].cut_connection(clientSocketFd);
+                        PRINT_HERE();
+                        continue ;
+                    }
+                    events.removeReadEvent(fd);
+                    events.addWriteEvent(clientSocketFd);
+                    continue ;
+                }
+                else /* if we no longer have connection with the client but there is stuff to send from cgi */
+                {
+                    cgi_out_files->erase(fd);
+                    clientToServerSocket.erase(clientSocketFd);
+                    cgiToClientSockets.erase(fd);
+                    if (fileIsOpen.count(fd))
+                    {
+                        close(fileIsOpen[fd]);
+                        fileIsOpen.erase(fd);
+                    }
+                    if (accumulatedValues.count(fd))
+                        accumulatedValues.erase(fd);
+                    fileSizes.erase(fd);
+                    close(fd);
+                    PRINT_HERE();
+                    events.removeReadEvent(fd);
+                    PRINT_HERE();
+                    serverSocketToServer[clientToServerSocket[clientSocketFd]].cut_connection(clientSocketFd);
+                    PRINT_HERE();
                     continue ;
                 }
             }
-            if (servers.count(fd)) /* if 'fd' is a server socket -> accept connection */
+            if (serverSocketToServer.count(fd)) /* if 'fd' is a server socket -> accept connection */
             {
                 int new_socket;
                 /* if could not accept connection continue to the next event */
-                if ((new_socket = servers[fd].accept_connection()) == -1)
+                if ((new_socket = serverSocketToServer[fd].accept_connection()) == -1)
                     continue ;
                 /* otherwise map the socket to the server socket */
-                sockets[new_socket] = fd;
+                clientToServerSocket[new_socket] = fd;
             }
 			else if (events[i].filter == EVFILT_READ)   /* socket is ready to be read */
             {
+                WARN(__LINE__);
                 if (events[i].flags & EV_EOF) /* client side shutdown */
                 {
-                    servers[sockets[fd]].cut_connection(fd);
-                    sockets.erase(fd);
+                    WARN(__LINE__);
+                    serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
+                    clientToServerSocket.erase(fd);
                     continue ;
                 }
                 /* update socket's timeout event */
                 events.addTimeEvent(fd, TIMEOUT_TO_CUT_CONNECTION * 1000);
                 /* handle connection */
-            	servers[sockets[fd]].handle_connection(fd);
+            	serverSocketToServer[clientToServerSocket[fd]].handle_connection(fd);
             }
             else if (events[i].filter == EVFILT_TIMER)  /* socket is expired */
             {
-				servers[sockets[fd]].send_timeout(fd); /* 408 Request Timeout */
-                servers[sockets[fd]].cut_connection(fd);
-                sockets.erase(fd);
+				serverSocketToServer[clientToServerSocket[fd]].send_timeout(fd); /* 408 Request Timeout */
+                serverSocketToServer[clientToServerSocket[fd]].cut_connection(fd);
+                clientToServerSocket.erase(fd);
             }
         }
     }

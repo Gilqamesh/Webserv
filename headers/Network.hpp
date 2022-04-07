@@ -25,13 +25,13 @@ class Network
 
     // 100.000.000
 	private:
-		std::map<int, server>		servers; // server_socket_fd - server
-		std::map<int, int>			sockets; // socket - server_socket_fd
-		std::map<int, int>			cgi_responses; /* cgi socket -> client socket */
-        std::map<int, int>          fileIsOpen; /* socket - file fd */
-        std::map<int, size_t>       fileSizes;
+		std::map<int, server>		serverSocketToServer; // server_socket_fd - server
+		std::map<int, int>			clientToServerSocket; // client socket - server_socket_fd
+		std::map<int, int>			cgiToClientSockets; /* cgi socket -> client socket */
+        std::map<int, int>          fileIsOpen; /* client socket - file fd */
+        std::map<int, size_t>       fileSizes; /* client socket - file size */
         // debug
-        std::map<int, size_t>          accumulatedValues;
+        std::map<int, size_t>       accumulatedValues; /* client socket - sent data so far */
 
 		Network(Network const &Network);
 		Network &operator=(Network const &Network);

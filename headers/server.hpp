@@ -45,12 +45,11 @@ private:
     int                                 current_number_of_connections;
     EventHandler                        *events;
     t_server                            server_configuration;
-
     /*
      * created when we start reading from a socket 
      * destroyed when we cut connection with the socket
      */
-    std::map<int, HttpObject *>         currentHttpObjects;
+    std::map<int, HttpObject *>         currentHttpObjects; /* cgi socket - HttpObject begin processed */
 public:
     std::map<int, std::string>          cgi_outfiles; /* cgi socket - filename */
 
@@ -70,6 +69,7 @@ public:
     void            cut_connection(int socket);
     void            handle_connection(int socket);
     void            send_timeout(int socket); /* Send response: 408 Request Timeout */
+    void            deleteHttpObject(int socket);
 
 private:
     http_request    *parse_request_header(int socket);

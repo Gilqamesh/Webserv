@@ -14,8 +14,10 @@ public:
     EventHandler &operator=(const EventHandler &other);
 
     void addReadEvent(int socket, int *userDefinedData = NULL);
+    void addWriteEvent(int socket);
     void addTimeEvent(int socket, int time_in_ms, int *userDefinedData = NULL);
     void removeReadEvent(int socket);
+    void removeWriteEvent(int socket);
     void removeTimeEvent(int socket);
 
     /* returns number of events */

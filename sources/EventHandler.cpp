@@ -36,26 +36,43 @@ void EventHandler::addReadEvent(int socket, int *userDefinedData)
     */
     EV_SET(&event, socket, EVFILT_READ, EV_ADD, 0, 0, userDefinedData);
     if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
-        TERMINATE("'kevent' failed in EventHandler");
+        TERMINATE("'kevent' failed in EventHandler::addReadEvent");
+}
+
+void EventHandler::addWriteEvent(int socket)
+{
+    /*
+     * 'EVFILT_WRITE' returns whenever it is possible to write to 'socket'
+     */
+    EV_SET(&event, socket, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+    if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+        TERMINATE("'kevent' failed in EventHandler::addWriteEvent");
 }
 
 void EventHandler::addTimeEvent(int socket, int time_in_ms, int *userDefinedData)
 {
     EV_SET(&event, socket, EVFILT_TIMER, EV_ADD, 0, time_in_ms, userDefinedData);
     if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
-        TERMINATE("'kevent' failed in EventHandler");
+        TERMINATE("'kevent' failed in EventHandler::addTimeEvent");
 }
 
 void EventHandler::removeReadEvent(int socket)
 {
     EV_SET(&event, socket, EVFILT_READ, EV_DELETE, 0, 0, NULL);
     if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
-        TERMINATE("'kevent' failed in EventHandler");
+        TERMINATE("'kevent' failed in EventHandler::removeReadEvent");
+}
+
+void EventHandler::removeWriteEvent(int socket)
+{
+    EV_SET(&event, socket, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+    if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+        TERMINATE("'kevent' failed in EventHandler::removeWriteEvent");
 }
 
 void EventHandler::removeTimeEvent(int socket)
 {
     EV_SET(&event, socket, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
     if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
-        TERMINATE("'kevent' failed in EventHandler");
+        TERMINATE("'kevent' failed in EventHandler::removeTimeEvent");
 }
