@@ -689,6 +689,27 @@ http_response server::format_http_response(http_request& request)
         {
             return (handle_post_request(request));
         }
+        if (cached_resources.count(request.target) && cached_resources[request.target].allowed_methods.count(request.method_token))
+        {
+            std::ofstream uploaded_file(request.underLocation);
+            if (!uploaded_file)
+                WARN("Failed to create file: " + request.underLocation);
+            uploaded_file << *request.payload;
+            http_response response;
+            response.http_version = "HTTP/1.1";
+            if (request.redirected == false) {
+                response.status_code = "200";
+                response.reason_phrase = "OK";
+            } else {
+                /* Redirect: Moved permanently */
+                response.status_code = "301";
+                response.reason_phrase = "Moved Permanently";
+            }
+            response.header_fields["Content-Type"] = "text/html";
+            response.header_fields["Connection"] = "close";
+            response.header_fields["Content-Length"] = std::to_string(0);
+            return (response);
+        }
     }
 
     if (request.reject == true) { /* Bad Request */
